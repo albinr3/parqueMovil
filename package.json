@@ -1,0 +1,41 @@
+{
+  "name": "parqueo-moto-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@poriyaalar/react-native-thermal-receipt-printer": "^1.4.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "^11.3.1",
+    "@react-navigation/native": "^6.1.17",
+    "@react-navigation/native-stack": "^6.9.26",
+    "@types/react": "~19.2.10",
+    "axios": "^1.7.9",
+    "date-fns": "^4.1.0",
+    "expo": "~55.0.0",
+    "expo-secure-store": "~55.0.11",
+    "expo-sqlite": "~55.0.13",
+    "react": "19.2.0",
+    "react-native": "0.83.4",
+    "react-native-paper": "^5.12.5",
+    "react-native-reanimated": "4.2.1",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-worklets": "0.7.2",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.10",
+    "babel-preset-expo": "^55.0.15",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~55.0.0",
+    "typescript": "~5.9.2"
+  }
+}

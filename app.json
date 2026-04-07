@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Parqueo Moto Badia",
+    "slug": "parqueo-moto-badia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EE8600"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.badia.parqueomoto",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EE8600"
+      }
+    },
+    "plugins": ["expo-secure-store", "expo-sqlite"],
+    "extra": {
+      "apiBaseUrl": "http://10.0.2.2:3000"
+    }
+  }
+}
