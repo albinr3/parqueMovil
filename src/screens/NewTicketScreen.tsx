@@ -4,10 +4,10 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Text, TextInput } from "react-native-paper";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useAuthStore } from "../stores/authStore";
+import { useConfigStore } from "../stores/configStore";
 import { useTicketStore } from "../stores/ticketStore";
-import { buildTicketPrintText } from "../utils/ticketPrint";
-import { printText } from "../services/printerService";
-import { DEFAULT_PARKING_NAME, DEFAULT_RATES } from "../config/constants";
+import { buildTicketPrintText, getTicketBarcodeValue } from "../utils/ticketPrint";
+import { printTextWithBarcode } from "../services/printerService";
 import { PrimaryAction } from "../components/PrimaryAction";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { SecondaryAction } from "../components/SecondaryAction";
@@ -20,6 +20,8 @@ const PLATE_REGEX = /^[A-Z0-9-]{4,10}$/;
 
 export const NewTicketScreen = ({ navigation }: Props) => {
   const user = useAuthStore((state) => state.user);
+  const parkingConfig = useConfigStore((state) => state.config);
+  const loadConfig = useConfigStore((state) => state.loadConfig);
   const addTicket = useTicketStore((state) => state.addTicket);
   const [plate, setPlate] = useState("");
   const [loadingAction, setLoadingAction] = useState<"print" | "save" | null>(null);
@@ -27,16 +29,25 @@ export const NewTicketScreen = ({ navigation }: Props) => {
   const { showMessage } = useFeedback();
 
   useEffect(() => {
+    void loadConfig({ forceRefresh: false });
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, []);
+  }, [loadConfig]);
 
   const handleCreate = async (printAfterCreate: boolean) => {
     if (!user || loadingAction) return;
 
     const normalizedPlate = plate.trim().toUpperCase();
-    if (normalizedPlate && !PLATE_REGEX.test(normalizedPlate)) {
+    if (!normalizedPlate) {
+      showMessage({
+        text: "La placa es obligatoria para crear el ticket",
+        type: "warning",
+      });
+      return;
+    }
+
+    if (!PLATE_REGEX.test(normalizedPlate)) {
       showMessage({
         text: "La placa debe tener entre 4 y 10 caracteres (A-Z, 0-9 o -)",
         type: "warning",
@@ -46,21 +57,34 @@ export const NewTicketScreen = ({ navigation }: Props) => {
 
     try {
       setLoadingAction(printAfterCreate ? "print" : "save");
-      const ticket = await addTicket(user.id, normalizedPlate || undefined);
+      const config = await loadConfig({ forceRefresh: false });
+      const ticket = await addTicket(user.id, normalizedPlate, config.normalRate);
 
       if (printAfterCreate) {
         const text = buildTicketPrintText({
-          parkingName: DEFAULT_PARKING_NAME,
+          parkingName: config.parkingName,
           ticketNumber: ticket.ticketNumber,
           plate: ticket.plate,
           entryTime: ticket.entryTime,
-          normalRate: DEFAULT_RATES.normal,
-          lostRate: DEFAULT_RATES.lost,
+          normalRate: config.normalRate,
+          lostRate: config.lostTicketRate,
+          headerText: config.ticketHeader,
         });
 
-        const printResult = await printText(text);
+        const printResult = await printTextWithBarcode(
+          text,
+          getTicketBarcodeValue(ticket.ticketNumber)
+        );
         if (printResult.ok) {
-          showMessage({ text: "Ticket creado e impreso", type: "success" });
+          if (printResult.warning) {
+            showMessage({
+              text: `Ticket creado. ${printResult.warning}`,
+              type: "warning",
+              duration: 3600,
+            });
+          } else {
+            showMessage({ text: "Ticket creado, cobrado e impreso", type: "success" });
+          }
         } else {
           showMessage({
             text: `Ticket creado, pero falló impresión: ${printResult.error}`,
@@ -69,7 +93,10 @@ export const NewTicketScreen = ({ navigation }: Props) => {
           });
         }
       } else {
-        showMessage({ text: "Ticket creado correctamente", type: "success" });
+        showMessage({
+          text: `Ticket creado y cobrado por $${ticket.entryAmountCharged}`,
+          type: "success",
+        });
       }
 
       setPlate("");
@@ -84,9 +111,12 @@ export const NewTicketScreen = ({ navigation }: Props) => {
   return (
     <ScreenContainer scroll contentContainerStyle={styles.container}>
       <Text variant="headlineSmall">Generar ticket</Text>
-      <SectionCard title="Datos de entrada" subtitle="La placa es opcional">
+      <SectionCard
+        title="Datos de entrada"
+        subtitle={`Tarifa actual: $${parkingConfig.normalRate} (ticket perdido +$${parkingConfig.lostTicketRate})`}
+      >
         <TextInput
-          label="Placa"
+          label="Placa *"
           value={plate}
           onChangeText={(value) => setPlate(value.toUpperCase())}
           mode="outlined"
@@ -98,16 +128,16 @@ export const NewTicketScreen = ({ navigation }: Props) => {
 
       <PrimaryAction
         icon="printer"
-        label="Imprimir y guardar"
+        label={`Imprimir y cobrar $${parkingConfig.normalRate}`}
         loading={loadingAction === "print"}
-        disabled={loadingAction !== null}
+        disabled={loadingAction !== null || !plate.trim()}
         onPress={() => void handleCreate(true)}
       />
       <SecondaryAction
         icon="content-save-outline"
-        label="Guardar sin imprimir"
+        label={`Guardar y cobrar $${parkingConfig.normalRate}`}
         loading={loadingAction === "save"}
-        disabled={loadingAction !== null}
+        disabled={loadingAction !== null || !plate.trim()}
         onPress={() => void handleCreate(false)}
       />
     </ScreenContainer>

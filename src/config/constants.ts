@@ -15,6 +15,13 @@ export const DEFAULT_RATES = {
 
 export const DEFAULT_PARKING_NAME = "Parqueo Moto Badia";
 
+export const DEFAULT_PARKING_CONFIG = {
+  parkingName: DEFAULT_PARKING_NAME,
+  normalRate: DEFAULT_RATES.normal,
+  lostTicketRate: DEFAULT_RATES.lost,
+  ticketHeader: "Conserve su ticket.",
+};
+
 export const SYNC_INTERVAL_MS = 30000;
 
 const configuredApiBaseUrl =

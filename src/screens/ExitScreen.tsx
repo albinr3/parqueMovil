@@ -1,146 +1,374 @@
-import { useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Modal, StyleSheet, View } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { Chip, Text, TextInput } from "react-native-paper";
+import { useConfigStore } from "../stores/configStore";
 import { useTicketStore } from "../stores/ticketStore";
 import { Ticket } from "../types";
-import { formatDateTime } from "../utils/format";
+import { formatCurrency, formatDateTime } from "../utils/format";
 import { PrimaryAction } from "../components/PrimaryAction";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { SecondaryAction } from "../components/SecondaryAction";
 import { SectionCard } from "../components/SectionCard";
 import { appSpacing } from "../theme/theme";
 import { useFeedback } from "../contexts/FeedbackContext";
-import { DEFAULT_RATES } from "../config/constants";
+
+const extractTicketNumber = (raw: string) => {
+  const digits = raw.match(/\d+/g)?.join("") ?? "";
+  if (!digits) return null;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
 export const ExitScreen = () => {
   const findActiveByNumber = useTicketStore((state) => state.findActiveByNumber);
-  const charge = useTicketStore((state) => state.charge);
+  const findActiveByPlate = useTicketStore((state) => state.findActiveByPlate);
+  const registerExit = useTicketStore((state) => state.registerExit);
+  const registerLostExit = useTicketStore((state) => state.registerLostExit);
+  const parkingConfig = useConfigStore((state) => state.config);
+  const loadConfig = useConfigStore((state) => state.loadConfig);
 
   const [ticketNumber, setTicketNumber] = useState("");
+  const [plateForLost, setPlateForLost] = useState("");
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [searching, setSearching] = useState(false);
-  const [chargingType, setChargingType] = useState<"normal" | "lost" | null>(null);
+  const [processingType, setProcessingType] = useState<"normal" | "lost" | null>(
+    null
+  );
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const scanLockRef = useRef(false);
   const { showMessage } = useFeedback();
 
-  const onSearch = async () => {
-    if (searching || chargingType) return;
+  useEffect(() => {
+    void loadConfig({ forceRefresh: false });
+  }, [loadConfig]);
 
-    if (!ticketNumber.trim()) {
-      showMessage({ text: "Ingresa el número de ticket", type: "warning" });
-      return;
-    }
-
-    const parsed = Number(ticketNumber);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      showMessage({ text: "Ingresa un número válido", type: "warning" });
-      return;
-    }
-
+  const searchActiveTicketByNumber = async (
+    number: number,
+    source: "manual" | "scanner"
+  ) => {
     try {
       setSearching(true);
-      const found = await findActiveByNumber(parsed);
+      const found = await findActiveByNumber(number);
       setTicket(found);
       showMessage({
-        text: found ? "Ticket encontrado" : "No existe ticket activo con ese número",
+        text: found
+          ? `Ticket #${found.ticketNumber.toString().padStart(4, "0")} encontrado`
+          : "No existe ticket activo con ese numero",
         type: found ? "success" : "warning",
       });
     } catch {
-      showMessage({ text: "No se pudo buscar el ticket", type: "error" });
+      showMessage({
+        text:
+          source === "scanner"
+            ? "No se pudo procesar el ticket escaneado"
+            : "No se pudo buscar el ticket",
+        type: "error",
+      });
     } finally {
       setSearching(false);
     }
   };
 
-  const onCharge = async (isLost: boolean) => {
-    if (!ticket || chargingType) return;
+  const onSearch = async () => {
+    if (searching || processingType) return;
 
-    const type = isLost ? "lost" : "normal";
-    const amount = isLost ? DEFAULT_RATES.lost : DEFAULT_RATES.normal;
-    const message = isLost ? "ticket perdido" : "ticket normal";
+    if (!ticketNumber.trim()) {
+      showMessage({ text: "Ingresa el numero de ticket", type: "warning" });
+      return;
+    }
 
+    const parsed = Number(ticketNumber);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      showMessage({ text: "Ingresa un numero valido", type: "warning" });
+      return;
+    }
+
+    await searchActiveTicketByNumber(parsed, "manual");
+  };
+
+  const onOpenScanner = async () => {
+    if (searching || processingType) return;
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : await requestCameraPermission();
+
+    if (!permission?.granted) {
+      showMessage({
+        text: "Debes permitir la camara para escanear tickets.",
+        type: "warning",
+      });
+      return;
+    }
+
+    setScannerVisible(true);
+  };
+
+  const onBarcodeScanned = async ({ data }: { data: string }) => {
+    if (scanLockRef.current || searching || processingType) return;
+    scanLockRef.current = true;
+
+    const parsed = extractTicketNumber(data);
+    if (!parsed) {
+      showMessage({
+        text: "No se pudo leer un numero de ticket en el codigo escaneado.",
+        type: "warning",
+      });
+      scanLockRef.current = false;
+      return;
+    }
+
+    setScannerVisible(false);
+    setTicketNumber(String(parsed));
+    await searchActiveTicketByNumber(parsed, "scanner");
+
+    setTimeout(() => {
+      scanLockRef.current = false;
+    }, 800);
+  };
+
+  const confirmNormalExit = (selected: Ticket) => {
     Alert.alert(
-      "Confirmar cobro",
-      `Vas a cobrar ${message} por $${amount}. ¿Deseas continuar?`,
+      "Confirmar salida",
+      `Registrar salida para ticket #${selected.ticketNumber
+        .toString()
+        .padStart(4, "0")}.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
           text: "Confirmar",
           style: "default",
-          onPress: () => void confirmCharge(type, isLost, amount),
+          onPress: () => void onRegisterNormal(selected.id),
         },
       ]
     );
   };
 
-  const confirmCharge = async (type: "normal" | "lost", isLost: boolean, amount: number) => {
-    if (!ticket || chargingType) return;
+  const onRegisterNormal = async (ticketId: string) => {
+    if (processingType) return;
 
     try {
-      setChargingType(type);
-      await charge(ticket.id, isLost);
+      setProcessingType("normal");
+      const updated = await registerExit(ticketId);
+      if (!updated) {
+        showMessage({ text: "No se pudo registrar la salida.", type: "error" });
+        return;
+      }
+
       showMessage({
-        text: `Cobro realizado por $${amount}`,
+        text: `Salida registrada. Total ticket: ${formatCurrency(
+          updated.amountCharged ?? 0
+        )}`,
         type: "success",
       });
       setTicket(null);
       setTicketNumber("");
+      setPlateForLost("");
     } catch {
-      showMessage({ text: "No se pudo procesar el cobro", type: "error" });
+      showMessage({ text: "No se pudo registrar la salida", type: "error" });
     } finally {
-      setChargingType(null);
+      setProcessingType(null);
+    }
+  };
+
+  const confirmLostExit = (selected: Ticket) => {
+    const lostRate = parkingConfig.lostTicketRate;
+    Alert.alert(
+      "Confirmar ticket perdido",
+      `Se registrara salida del ticket #${selected.ticketNumber
+        .toString()
+        .padStart(4, "0")} y se agregara recargo de $${lostRate}.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar",
+          style: "default",
+          onPress: () => void onRegisterLost(selected.id, lostRate),
+        },
+      ]
+    );
+  };
+
+  const onRegisterLost = async (ticketId: string, lostRate: number) => {
+    if (processingType) return;
+
+    try {
+      setProcessingType("lost");
+      const updated = await registerLostExit(ticketId, lostRate);
+      if (!updated) {
+        showMessage({ text: "No se pudo registrar ticket perdido.", type: "error" });
+        return;
+      }
+
+      showMessage({
+        text: `Salida registrada con recargo de ${formatCurrency(lostRate)}.`,
+        type: "success",
+      });
+      setTicket(null);
+      setTicketNumber("");
+      setPlateForLost("");
+    } catch {
+      showMessage({ text: "No se pudo procesar ticket perdido", type: "error" });
+    } finally {
+      setProcessingType(null);
+    }
+  };
+
+  const onLostAction = async () => {
+    if (searching || processingType) return;
+
+    if (ticket) {
+      confirmLostExit(ticket);
+      return;
+    }
+
+    const normalizedPlate = plateForLost.trim().toUpperCase();
+    if (!normalizedPlate) {
+      showMessage({
+        text: "Ingresa la placa para buscar el ticket activo.",
+        type: "warning",
+      });
+      return;
+    }
+
+    try {
+      setSearching(true);
+      const found = await findActiveByPlate(normalizedPlate);
+      if (!found) {
+        showMessage({
+          text: "No hay ticket activo para esa placa.",
+          type: "warning",
+        });
+        return;
+      }
+
+      setTicket(found);
+      setTicketNumber(String(found.ticketNumber));
+      confirmLostExit(found);
+    } catch {
+      showMessage({
+        text: "No se pudo buscar ticket por placa.",
+        type: "error",
+      });
+    } finally {
+      setSearching(false);
     }
   };
 
   return (
     <ScreenContainer scroll contentContainerStyle={styles.container}>
-      <SectionCard title="Buscar ticket activo" subtitle="Ingresa el número del ticket para cobrar salida">
+      <SectionCard
+        title="Buscar ticket activo"
+        subtitle="Ingresa o escanea el ticket para registrar salida"
+      >
         <TextInput
           mode="outlined"
           label="# Ticket"
           keyboardType="numeric"
           value={ticketNumber}
           onChangeText={setTicketNumber}
-          maxLength={6}
+          maxLength={8}
         />
-        <SecondaryAction
-          icon="magnify"
-          label="Buscar"
-          loading={searching}
-          disabled={searching || chargingType !== null}
-          onPress={() => void onSearch()}
-        />
+        <View style={styles.actionsRow}>
+          <SecondaryAction
+            icon="magnify"
+            label="Buscar"
+            loading={searching}
+            disabled={searching || processingType !== null}
+            style={styles.actionSplit}
+            onPress={() => void onSearch()}
+          />
+          <SecondaryAction
+            icon="camera-outline"
+            label="Escanear"
+            disabled={searching || processingType !== null}
+            style={styles.actionSplit}
+            onPress={() => void onOpenScanner()}
+          />
+        </View>
       </SectionCard>
 
       {ticket ? (
         <SectionCard title={`Ticket #${ticket.ticketNumber.toString().padStart(4, "0")}`}>
           <View style={styles.ticketRow}>
             <Text>Entrada: {formatDateTime(ticket.entryTime)}</Text>
-            <Chip compact icon="clock-outline">Activo</Chip>
+            <Chip compact icon="clock-outline">
+              Activo
+            </Chip>
           </View>
           <Text>Placa: {ticket.plate || "N/A"}</Text>
+          <Text>Monto entrada: {formatCurrency(ticket.entryAmountCharged)}</Text>
         </SectionCard>
       ) : (
         <SectionCard title="Esperando ticket">
-          <Text variant="bodyMedium">Busca un ticket para habilitar las acciones de cobro.</Text>
+          <Text variant="bodyMedium">
+            Busca un ticket para habilitar Registrar salida.
+          </Text>
         </SectionCard>
       )}
 
       <PrimaryAction
-        icon="cash-check"
+        icon="exit-run"
         buttonColor="#1F7A3D"
-        label={`Cobrar $${DEFAULT_RATES.normal}`}
-        loading={chargingType === "normal"}
-        disabled={!ticket || searching || chargingType !== null}
-        onPress={() => onCharge(false)}
+        label="Registrar salida"
+        loading={processingType === "normal"}
+        disabled={!ticket || searching || processingType !== null}
+        onPress={() => ticket && confirmNormalExit(ticket)}
       />
-      <PrimaryAction
-        icon="alert-circle-outline"
-        buttonColor="#B42318"
-        label={`Ticket perdido $${DEFAULT_RATES.lost}`}
-        loading={chargingType === "lost"}
-        disabled={!ticket || searching || chargingType !== null}
-        onPress={() => onCharge(true)}
-      />
+
+      <View style={styles.lostSectionWrap}>
+        <SectionCard
+          title="Ticket perdido sin ticket fisico"
+          subtitle="Si no tienes numero, busca por placa y aplica recargo"
+        >
+          <TextInput
+            mode="outlined"
+            label="Placa"
+            value={plateForLost}
+            onChangeText={(value) => setPlateForLost(value.toUpperCase())}
+            autoCapitalize="characters"
+            maxLength={10}
+            placeholder="Ej: AB-1234"
+          />
+          <SecondaryAction
+            icon="alert-circle-outline"
+            label={`Ticket perdido +$${parkingConfig.lostTicketRate}`}
+            textColor="#B42318"
+            style={styles.lostButton}
+            loading={processingType === "lost"}
+            disabled={searching || processingType !== null}
+            onPress={() => void onLostAction()}
+          />
+        </SectionCard>
+      </View>
+
+      <Modal
+        visible={scannerVisible}
+        animationType="slide"
+        onRequestClose={() => setScannerVisible(false)}
+      >
+        <View style={styles.scannerWrap}>
+          <Text variant="titleMedium" style={styles.scannerTitle}>
+            Escanea el codigo de barras del ticket
+          </Text>
+          <View style={styles.cameraFrame}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              onBarcodeScanned={scannerVisible ? onBarcodeScanned : undefined}
+              barcodeScannerSettings={{
+                barcodeTypes: ["code128", "code39", "ean13", "ean8", "upc_a"] as any,
+              }}
+            />
+          </View>
+          <SecondaryAction
+            icon="close"
+            label="Cerrar escaner"
+            onPress={() => setScannerVisible(false)}
+          />
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -149,9 +377,48 @@ const styles = StyleSheet.create({
   container: {
     gap: appSpacing.md,
   },
+  actionsRow: {
+    flexDirection: "row",
+    gap: appSpacing.sm,
+  },
+  actionSplit: {
+    flex: 1,
+  },
   ticketRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  scannerWrap: {
+    flex: 1,
+    padding: appSpacing.md,
+    gap: appSpacing.md,
+    justifyContent: "center",
+    backgroundColor: "#0F172A",
+  },
+  scannerTitle: {
+    color: "#F8FAFC",
+  },
+  cameraFrame: {
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    backgroundColor: "#000",
+  },
+  camera: {
+    width: "100%",
+    height: 420,
+  },
+  lostButton: {
+    width: "68%",
+    alignSelf: "center",
+    marginTop: appSpacing.sm,
+  },
+  lostSectionWrap: {
+    marginTop: appSpacing.sm,
+    paddingTop: appSpacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
   },
 });

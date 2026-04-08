@@ -1,20 +1,24 @@
 import { create } from "zustand";
 import { Ticket } from "../types";
 import {
-  chargeTicket,
   countActiveTickets,
   createTicket,
+  getActiveTicketByPlate,
   getActiveTicketByNumber,
   listTicketsByCurrentShift,
+  registerLostTicketExit,
+  registerTicketExit,
 } from "../services/ticketService";
 
 type TicketState = {
   tickets: Ticket[];
   activeTickets: number;
   loadToday: () => Promise<void>;
-  addTicket: (userId: string, plate?: string) => Promise<Ticket>;
+  addTicket: (userId: string, plate: string, normalRate: number) => Promise<Ticket>;
   findActiveByNumber: (ticketNumber: number) => Promise<Ticket | null>;
-  charge: (ticketId: string, isLostTicket: boolean) => Promise<Ticket | null>;
+  findActiveByPlate: (plate: string) => Promise<Ticket | null>;
+  registerExit: (ticketId: string) => Promise<Ticket | null>;
+  registerLostExit: (ticketId: string, lostRate: number) => Promise<Ticket | null>;
 };
 
 export const useTicketStore = create<TicketState>((set, get) => ({
@@ -28,14 +32,20 @@ export const useTicketStore = create<TicketState>((set, get) => ({
 
     set({ tickets, activeTickets: activeCount });
   },
-  addTicket: async (userId, plate) => {
-    const ticket = await createTicket(userId, plate);
+  addTicket: async (userId, plate, normalRate) => {
+    const ticket = await createTicket(userId, plate, normalRate);
     await get().loadToday();
     return ticket;
   },
   findActiveByNumber: async (ticketNumber) => getActiveTicketByNumber(ticketNumber),
-  charge: async (ticketId, isLostTicket) => {
-    const updated = await chargeTicket(ticketId, isLostTicket);
+  findActiveByPlate: async (plate) => getActiveTicketByPlate(plate),
+  registerExit: async (ticketId) => {
+    const updated = await registerTicketExit(ticketId);
+    await get().loadToday();
+    return updated ?? null;
+  },
+  registerLostExit: async (ticketId, lostRate) => {
+    const updated = await registerLostTicketExit(ticketId, lostRate);
     await get().loadToday();
     return updated ?? null;
   },

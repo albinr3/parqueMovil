@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import NetInfo from "@react-native-community/netinfo";
-import { startSyncLoop, syncNow } from "../services/syncService";
+import { onSyncCompleted, requestSync, syncNow } from "../services/syncService";
 
 type SyncStatus = "online" | "offline" | "pending";
 
@@ -11,20 +11,41 @@ type SyncState = {
   forceSync: () => Promise<void>;
 };
 
+let syncCompletionUnsubscribe: (() => void) | null = null;
+
 export const useSyncStore = create<SyncState>((set) => ({
   status: "pending",
   lastSyncAt: null,
   init: () => {
     console.log("[SYNC][STORE] init");
+    let wasOnline = false;
+
     NetInfo.addEventListener((state) => {
+      const isOnline =
+        Boolean(state.isConnected) && state.isInternetReachable !== false;
       console.log("[SYNC][STORE] connectivity_change", {
         isConnected: state.isConnected,
         isInternetReachable: state.isInternetReachable,
       });
-      set({ status: state.isConnected ? "online" : "offline" });
+      set({ status: isOnline ? "online" : "offline" });
+
+      if (isOnline && !wasOnline) {
+        requestSync("connectivity_restored");
+      }
+      wasOnline = isOnline;
     });
 
-    startSyncLoop();
+    if (!syncCompletionUnsubscribe) {
+      syncCompletionUnsubscribe = onSyncCompleted((event) => {
+        if (event.processed > 0) {
+          set({ lastSyncAt: event.timestamp });
+          console.log("[SYNC][STORE] lastSyncAt:updated_from_auto_sync", {
+            processed: event.processed,
+            timestamp: event.timestamp,
+          });
+        }
+      });
+    }
   },
   forceSync: async () => {
     console.log("[SYNC][STORE] forceSync:start");

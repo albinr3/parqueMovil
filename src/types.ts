@@ -17,6 +17,8 @@ export type Ticket = {
   entryTime: string;
   exitTime: string | null;
   amountCharged: number | null;
+  entryAmountCharged: number;
+  lostExtraCharged: number;
   isLostTicket: number;
   userId: string;
   closureId: string | null;

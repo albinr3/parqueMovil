@@ -10,6 +10,7 @@ type Props = {
   loading?: boolean;
   buttonColor?: string;
   style?: StyleProp<ViewStyle>;
+  contentStyle?: StyleProp<ViewStyle>;
 };
 
 export const PrimaryAction = ({
@@ -20,6 +21,7 @@ export const PrimaryAction = ({
   loading,
   buttonColor,
   style,
+  contentStyle,
 }: Props) => (
   <Button
     mode="contained"
@@ -29,7 +31,7 @@ export const PrimaryAction = ({
     loading={loading}
     buttonColor={buttonColor}
     style={[styles.button, style]}
-    contentStyle={styles.content}
+    contentStyle={[styles.content, contentStyle]}
     labelStyle={styles.label}
   >
     {label}

@@ -57,7 +57,7 @@ export const HomeScreen = ({ navigation }: Props) => {
 
       <View style={styles.mainActions}>
         <PrimaryAction icon="ticket" label="Nuevo Ticket" buttonColor="#1F7A3D" onPress={() => navigation.navigate("NewTicket")} />
-        <PrimaryAction icon="cash-register" label="Cobrar Salida" buttonColor="#D97706" onPress={() => navigation.navigate("Exit")} />
+        <PrimaryAction icon="gate-open" label="Registrar Salida" buttonColor="#D97706" onPress={() => navigation.navigate("Exit")} />
         <PrimaryAction icon="clipboard-check-outline" label="Cerrar Caja" buttonColor="#1D4ED8" onPress={() => navigation.navigate("Closure")} />
       </View>
 

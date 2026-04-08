@@ -19,6 +19,15 @@
         "backgroundColor": "#EE8600"
       }
     },
-    "plugins": ["expo-secure-store", "expo-sqlite"]
+    "plugins": [
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite escanear codigos de barras de tickets."
+        }
+      ]
+    ]
   }
 }

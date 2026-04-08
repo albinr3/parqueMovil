@@ -10,6 +10,7 @@ import { ExitScreen } from "../screens/ExitScreen";
 import { ClosureScreen } from "../screens/ClosureScreen";
 import { HistoryScreen } from "../screens/HistoryScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
+import { PrinterDevicesScreen } from "../screens/PrinterDevicesScreen";
 import { appNavigationTheme, appTheme } from "../theme/theme";
 
 export type RootStackParamList = {
@@ -20,6 +21,7 @@ export type RootStackParamList = {
   Closure: undefined;
   History: undefined;
   Settings: undefined;
+  Printers: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -65,10 +67,11 @@ export const AppNavigator = () => {
               }}
             />
             <Stack.Screen name="NewTicket" component={NewTicketScreen} options={{ title: "Nuevo Ticket" }} />
-            <Stack.Screen name="Exit" component={ExitScreen} options={{ title: "Cobrar Salida" }} />
+            <Stack.Screen name="Exit" component={ExitScreen} options={{ title: "Registrar Salida" }} />
             <Stack.Screen name="Closure" component={ClosureScreen} options={{ title: "Cierre de Caja" }} />
             <Stack.Screen name="History" component={HistoryScreen} options={{ title: "Historial" }} />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Configuración" }} />
+            <Stack.Screen name="Printers" component={PrinterDevicesScreen} options={{ title: "Impresoras" }} />
           </>
         )}
       </Stack.Navigator>

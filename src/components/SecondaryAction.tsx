@@ -9,15 +9,17 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  textColor?: string;
 };
 
-export const SecondaryAction = ({ label, onPress, icon, disabled, loading, style }: Props) => (
+export const SecondaryAction = ({ label, onPress, icon, disabled, loading, style, textColor }: Props) => (
   <Button
     mode="outlined"
     icon={icon}
     onPress={onPress}
     disabled={disabled}
     loading={loading}
+    textColor={textColor}
     style={[styles.button, style]}
     contentStyle={styles.content}
     labelStyle={styles.label}

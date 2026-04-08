@@ -19,6 +19,8 @@ export const SCHEMA_SQL = [
     entry_time TEXT NOT NULL,
     exit_time TEXT,
     amount_charged INTEGER,
+    entry_amount_charged INTEGER NOT NULL DEFAULT 0,
+    lost_extra_charged INTEGER NOT NULL DEFAULT 0,
     is_lost_ticket INTEGER NOT NULL DEFAULT 0,
     user_id TEXT NOT NULL,
     closure_id TEXT,

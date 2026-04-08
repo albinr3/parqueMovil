@@ -1,36 +1,83 @@
-import { BLEPrinter } from "@poriyaalar/react-native-thermal-receipt-printer";
+import {
+  BlePrinterDevice,
+  connectBlePrinter,
+  disconnectBlePrinter,
+  getBlePrinterMissingModuleMessage,
+  isBlePrinterModuleAvailable,
+  listBlePrinters,
+} from "./printing/blePrinterService";
+import {
+  clearConnectedPrinter,
+  getConnectedPrinter,
+  printTicketDirect,
+  printTicketWithCode128,
+  saveConnectedPrinter,
+  StoredPrinter,
+} from "./printing/thermalPrinterService";
 
 type PrintResult = {
   ok: boolean;
   error?: string;
+  warning?: string;
 };
 
 export const printText = async (text: string): Promise<PrintResult> => {
-  try {
-    // Este SDK expone `printBill` con callbacks obligatorios en su tipado.
-    // Se envuelve en Promise para mantener API async y evitar regresiones de TS.
-    await new Promise<void>((resolve, reject) => {
-      BLEPrinter.printBill(
-        text,
-        undefined,
-        () => resolve(),
-        (error) => reject(error)
-      );
-    });
-    return { ok: true };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "No fue posible imprimir",
-    };
+  const result = await printTicketDirect(text);
+  if (result.printed) {
+    return { ok: true, warning: result.warning };
   }
+  return {
+    ok: false,
+    error: result.message || "No fue posible imprimir",
+  };
 };
 
-export const listPairedPrinters = async () => {
+export const printTextWithBarcode = async (
+  text: string,
+  barcodeValue: string
+): Promise<PrintResult> => {
+  const result = await printTicketWithCode128(text, barcodeValue);
+  if (result.printed) {
+    return { ok: true, warning: result.warning };
+  }
+  return {
+    ok: false,
+    error: result.message || "No fue posible imprimir",
+  };
+};
+
+export const listPairedPrinters = async (): Promise<BlePrinterDevice[]> => {
   try {
-    const devices = await BLEPrinter.getDeviceList();
-    return devices;
+    return await listBlePrinters();
   } catch {
     return [];
   }
+};
+
+export const connectPrinter = async (
+  device: BlePrinterDevice
+): Promise<StoredPrinter> => {
+  await connectBlePrinter(device.address);
+  const connected: StoredPrinter = {
+    id: device.id,
+    name: device.name,
+    address: device.address,
+    connected: true,
+  };
+  await saveConnectedPrinter(connected);
+  return connected;
+};
+
+export const disconnectPrinter = async () => {
+  if (isBlePrinterModuleAvailable()) {
+    await disconnectBlePrinter();
+  }
+  await clearConnectedPrinter();
+};
+
+export const getSavedPrinter = async () => getConnectedPrinter();
+
+export {
+  getBlePrinterMissingModuleMessage,
+  isBlePrinterModuleAvailable,
 };

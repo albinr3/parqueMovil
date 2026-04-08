@@ -5,6 +5,7 @@ import * as NavigationBar from "expo-navigation-bar";
 import { runMigrations } from "./src/database/migrations";
 import { AppNavigator } from "./src/navigation/AppNavigator";
 import { useAuthStore } from "./src/stores/authStore";
+import { useConfigStore } from "./src/stores/configStore";
 import { useSyncStore } from "./src/stores/syncStore";
 import { FeedbackProvider } from "./src/contexts/FeedbackContext";
 import { appTheme } from "./src/theme/theme";
@@ -13,15 +14,17 @@ export default function App() {
   const loading = useAuthStore((state) => state.loading);
   const initAuth = useAuthStore((state) => state.init);
   const initSync = useSyncStore((state) => state.init);
+  const loadConfig = useConfigStore((state) => state.loadConfig);
 
   useEffect(() => {
     runMigrations()
       .then(() => initAuth())
       .then(() => initSync())
+      .then(() => loadConfig({ forceRefresh: false }))
       .catch(() => {
         // Evita romper render inicial; errores se manejaran en UI/log.
       });
-  }, [initAuth, initSync]);
+  }, [initAuth, initSync, loadConfig]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;

@@ -1,4 +1,5 @@
 import { getDb } from "../database/db";
+import { requestSync } from "./syncService";
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -12,30 +13,44 @@ const queueClosureSync = async (closure: unknown, closureId: string) => {
   );
 
   console.log("[SYNC][QUEUE] closure_enqueued", { queueId, closureId, action: "create" });
+  requestSync("queue_closure_create");
 };
 
 export const getShiftSummary = async () => {
   const db = await getDb();
 
-  const paid = await db.getFirstAsync<{ total: number; amount: number }>(
-    "SELECT COUNT(*) as total, COALESCE(SUM(amount_charged), 0) as amount FROM tickets WHERE status = 'PAID' AND date(exit_time) = date('now')"
+  const entries = await db.getFirstAsync<{ total: number; amount: number }>(
+    `SELECT
+      COUNT(*) as total,
+      COALESCE(SUM(entry_amount_charged), 0) as amount
+     FROM tickets
+     WHERE date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
   );
 
   const lost = await db.getFirstAsync<{ total: number; amount: number }>(
-    "SELECT COUNT(*) as total, COALESCE(SUM(amount_charged), 0) as amount FROM tickets WHERE status = 'LOST_PAID' AND date(exit_time) = date('now')"
+    `SELECT
+      COUNT(*) as total,
+      COALESCE(SUM(lost_extra_charged), 0) as amount
+     FROM tickets
+     WHERE status = 'LOST_PAID'
+       AND date(datetime(exit_time, '-4 hours')) = date(datetime('now', '-4 hours'))
+       AND COALESCE(lost_extra_charged, 0) > 0`
   );
 
   const pending = await db.getFirstAsync<{ total: number }>(
-    "SELECT COUNT(*) as total FROM tickets WHERE status = 'ACTIVE'"
+    `SELECT COUNT(*) as total
+     FROM tickets
+     WHERE status = 'ACTIVE'
+       AND date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
   );
 
-  const normalTickets = paid?.total ?? 0;
+  const normalTickets = entries?.total ?? 0;
   const lostTickets = lost?.total ?? 0;
-  const normalAmount = paid?.amount ?? 0;
+  const normalAmount = entries?.amount ?? 0;
   const lostAmount = lost?.amount ?? 0;
 
   return {
-    totalTickets: normalTickets + lostTickets,
+    totalTickets: normalTickets,
     normalTickets,
     lostTickets,
     totalAmount: normalAmount + lostAmount,

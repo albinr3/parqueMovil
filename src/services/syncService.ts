@@ -5,6 +5,19 @@ import { getDb } from "../database/db";
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 const SYNC_LOG_PREFIX = "[SYNC]";
+let syncInFlight: Promise<{
+  processed: number;
+  skipped: boolean;
+  error?: string;
+}> | null = null;
+let scheduledSyncTimer: ReturnType<typeof setTimeout> | null = null;
+type SyncResult = {
+  processed: number;
+  skipped: boolean;
+  error?: string;
+};
+type SyncCompletedEvent = SyncResult & { timestamp: string };
+const syncCompletedListeners = new Set<(event: SyncCompletedEvent) => void>();
 
 type SyncApiResponse = {
   success?: boolean;
@@ -27,6 +40,20 @@ const warn = (...args: unknown[]) => {
 
 const errorLog = (...args: unknown[]) => {
   console.error(SYNC_LOG_PREFIX, ...args);
+};
+
+const notifySyncCompleted = (result: SyncResult) => {
+  const event: SyncCompletedEvent = {
+    ...result,
+    timestamp: new Date().toISOString(),
+  };
+  for (const listener of syncCompletedListeners) {
+    try {
+      listener(event);
+    } catch (listenerError) {
+      errorLog("syncNow:listener_error", listenerError);
+    }
+  }
 };
 
 const buildSyncEvents = (pending: {
@@ -195,7 +222,7 @@ const getCandidateBaseUrls = (baseUrl: string) => {
   }
 };
 
-export const syncNow = async () => {
+const runSyncNow = async () => {
   log("syncNow:start", { apiBaseUrl: API_BASE_URL, timestamp: new Date().toISOString() });
 
   const net = await NetInfo.fetch();
@@ -363,30 +390,57 @@ export const syncNow = async () => {
   return { processed: 0, skipped: false, error: lastReason };
 };
 
-export const startSyncLoop = () => {
-  if (syncInterval) {
-    warn("loop:already_running");
-    return;
+export const syncNow = async () => {
+  if (syncInFlight) {
+    log("syncNow:join_inflight");
+    return syncInFlight;
+  }
+  syncInFlight = runSyncNow()
+    .then((result) => {
+      notifySyncCompleted(result);
+      return result;
+    })
+    .finally(() => {
+      syncInFlight = null;
+    });
+  return syncInFlight;
+};
+
+export const onSyncCompleted = (
+  listener: (event: SyncCompletedEvent) => void
+) => {
+  syncCompletedListeners.add(listener);
+  return () => {
+    syncCompletedListeners.delete(listener);
+  };
+};
+
+export const requestSync = (reason: string, debounceMs = 800) => {
+  if (scheduledSyncTimer) {
+    clearTimeout(scheduledSyncTimer);
   }
 
-  log("loop:start", { intervalMs: SYNC_INTERVAL_MS });
-
-  syncInterval = setInterval(() => {
-    log("loop:tick");
+  scheduledSyncTimer = setTimeout(() => {
+    scheduledSyncTimer = null;
+    log("syncNow:requested", { reason });
     syncNow().catch(() => {
-      // La app no debe romperse por fallas de red/transitorias de API.
-      errorLog("loop:tick_failed");
+      errorLog("syncNow:requested_failed", { reason });
     });
-  }, SYNC_INTERVAL_MS);
+  }, debounceMs);
+};
+
+export const startSyncLoop = () => {
+  warn("loop:disabled_event_driven", { intervalMs: SYNC_INTERVAL_MS });
 };
 
 export const stopSyncLoop = () => {
-  if (!syncInterval) {
-    warn("loop:stop_requested_but_not_running");
-    return;
+  if (scheduledSyncTimer) {
+    clearTimeout(scheduledSyncTimer);
+    scheduledSyncTimer = null;
   }
-
-  clearInterval(syncInterval);
-  syncInterval = null;
+  if (syncInterval) {
+    clearInterval(syncInterval);
+    syncInterval = null;
+  }
   log("loop:stopped");
 };
