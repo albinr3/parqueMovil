@@ -17,4 +17,8 @@ export const DEFAULT_PARKING_NAME = "Parqueo Moto Badia";
 
 export const SYNC_INTERVAL_MS = 30000;
 
-export const API_BASE_URL = "http://10.0.2.2:3000";
+const configuredApiBaseUrl =
+  process.env.EXPO_PUBLIC_API_BASE_URL ??
+  "http://10.0.2.2:3000";
+
+export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, "");

@@ -6,11 +6,14 @@ const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const queueSync = async (entityType: "ticket" | "closure", entityId: string, action: "create" | "update", payload: unknown) => {
   const db = await getDb();
+  const queueId = createId();
 
   await db.runAsync(
     "INSERT INTO sync_queue(id, entity_type, entity_id, action, payload, processed) VALUES (?, ?, ?, ?, ?, 0)",
-    [createId(), entityType, entityId, action, JSON.stringify(payload)]
+    [queueId, entityType, entityId, action, JSON.stringify(payload)]
   );
+
+  console.log("[SYNC][QUEUE] enqueued", { queueId, entityType, entityId, action });
 };
 
 export const getNextTicketNumber = async () => {
@@ -56,6 +59,11 @@ export const createTicket = async (userId: string, plate?: string) => {
   };
 
   await queueSync("ticket", id, "create", ticket);
+  console.log("[SYNC][TICKET] created_and_queued", {
+    ticketId: id,
+    ticketNumber,
+    plate: ticket.plate,
+  });
 
   return ticket;
 };
@@ -116,6 +124,11 @@ export const chargeTicket = async (ticketId: string, isLostTicket: boolean) => {
 
   if (updated) {
     await queueSync("ticket", ticketId, "update", updated);
+    console.log("[SYNC][TICKET] updated_and_queued", {
+      ticketId,
+      status: updated.status,
+      amountCharged: updated.amountCharged,
+    });
   }
 
   return updated;

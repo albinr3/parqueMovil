@@ -1,20 +1,9 @@
-import { StyleSheet, View, Image } from "react-native";
-import { Text } from "react-native-paper";
+import { StyleSheet, View } from "react-native";
 import { SyncIndicator } from "./SyncIndicator";
+import { appSpacing } from "../theme/theme";
 
-type Props = {
-  employeeName: string;
-};
-
-export const Header = ({ employeeName }: Props) => (
+export const Header = () => (
   <View style={styles.wrap}>
-    <View style={styles.left}>
-      <Image source={require("../../assets/logo.jpg")} style={styles.logo} />
-      <View>
-        <Text variant="titleMedium">Parqueo Moto Badia</Text>
-        <Text variant="bodySmall">Encargado: {employeeName}</Text>
-      </View>
-    </View>
     <SyncIndicator />
   </View>
 );
@@ -22,20 +11,10 @@ export const Header = ({ employeeName }: Props) => (
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     alignItems: "center",
-    marginBottom: 16,
-    gap: 10,
-  },
-  left: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    marginBottom: appSpacing.sm,
+    gap: appSpacing.sm,
+    paddingHorizontal: appSpacing.xs,
   },
 });

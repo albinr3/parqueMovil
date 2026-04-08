@@ -1,12 +1,18 @@
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { StyleSheet, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Button, Card, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 import { Header } from "../components/Header";
-import { BigButton } from "../components/BigButton";
+import { PrimaryAction } from "../components/PrimaryAction";
+import { ScreenContainer } from "../components/ScreenContainer";
+import { SectionCard } from "../components/SectionCard";
+import { SecondaryAction } from "../components/SecondaryAction";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useAuthStore } from "../stores/authStore";
 import { useTicketStore } from "../stores/ticketStore";
+import { appSpacing } from "../theme/theme";
+import { formatCurrency } from "../utils/format";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -17,40 +23,85 @@ export const HomeScreen = ({ navigation }: Props) => {
   const tickets = useTicketStore((state) => state.tickets);
   const activeTickets = useTicketStore((state) => state.activeTickets);
 
-  useEffect(() => {
-    loadToday().catch(() => undefined);
-  }, [loadToday]);
+  useFocusEffect(
+    useCallback(() => {
+      loadToday().catch(() => undefined);
+    }, [loadToday])
+  );
 
   const totalRecaudado = tickets.reduce((sum, t) => sum + (t.amountCharged ?? 0), 0);
 
   return (
-    <View style={styles.container}>
-      <Header employeeName={user?.name || ""} />
+    <ScreenContainer contentContainerStyle={styles.container}>
+      <Header />
 
-      <Card style={styles.summary}>
-        <Card.Content>
-          <Text variant="titleLarge">Turno Actual</Text>
-          <Text>Motos atendidas: {tickets.length}</Text>
-          <Text>Motos activas: {activeTickets}</Text>
-          <Text>Recaudado: ${totalRecaudado}</Text>
-        </Card.Content>
-      </Card>
+      <SectionCard title="Turno actual" subtitle="Resumen en tiempo real del día">
+        <Text variant="bodyMedium" style={styles.contextLine}>
+          Encargado: {user?.name || "N/A"}
+        </Text>
+        <View style={styles.metrics}>
+          <View style={styles.metric}>
+            <Text variant="headlineSmall">{tickets.length}</Text>
+            <Text variant="bodySmall">Motos atendidas</Text>
+          </View>
+          <View style={styles.metric}>
+            <Text variant="headlineSmall">{activeTickets}</Text>
+            <Text variant="bodySmall">Motos activas</Text>
+          </View>
+          <View style={styles.metric}>
+            <Text variant="headlineSmall">{formatCurrency(totalRecaudado)}</Text>
+            <Text variant="bodySmall">Recaudado</Text>
+          </View>
+        </View>
+      </SectionCard>
 
-      <BigButton icon="ticket" label="NUEVO TICKET" color="#16A34A" onPress={() => navigation.navigate("NewTicket")} />
-      <BigButton icon="cash" label="COBRAR SALIDA" color="#EE8600" onPress={() => navigation.navigate("Exit")} />
-      <BigButton icon="clipboard-text" label="CERRAR CAJA" color="#2563EB" onPress={() => navigation.navigate("Closure")} />
+      <View style={styles.mainActions}>
+        <PrimaryAction icon="ticket" label="Nuevo Ticket" buttonColor="#1F7A3D" onPress={() => navigation.navigate("NewTicket")} />
+        <PrimaryAction icon="cash-register" label="Cobrar Salida" buttonColor="#D97706" onPress={() => navigation.navigate("Exit")} />
+        <PrimaryAction icon="clipboard-check-outline" label="Cerrar Caja" buttonColor="#1D4ED8" onPress={() => navigation.navigate("Closure")} />
+      </View>
 
       <View style={styles.footerActions}>
-        <Button mode="outlined" onPress={() => navigation.navigate("History")}>Historial</Button>
-        <Button mode="outlined" onPress={() => navigation.navigate("Settings")}>Ajustes</Button>
-        <Button onPress={logout}>Salir</Button>
+        <SecondaryAction icon="history" label="Historial" style={styles.secondaryItem} onPress={() => navigation.navigate("History")} />
+        <SecondaryAction icon="cog-outline" label="Ajustes" style={styles.secondaryItem} onPress={() => navigation.navigate("Settings")} />
+        <SecondaryAction icon="logout" label="Salir" style={styles.secondaryItem} onPress={() => void logout()} />
       </View>
-    </View>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 12 },
-  summary: { marginBottom: 6 },
-  footerActions: { flexDirection: "row", justifyContent: "space-between", marginTop: "auto" },
+  container: {
+    gap: appSpacing.md,
+    paddingTop: 0,
+  },
+  metrics: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: appSpacing.sm,
+  },
+  contextLine: {
+    opacity: 0.8,
+  },
+  metric: {
+    minWidth: "31%",
+    flexGrow: 1,
+    padding: appSpacing.md,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 2,
+  },
+  mainActions: {
+    gap: appSpacing.sm,
+  },
+  footerActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: appSpacing.sm,
+    marginTop: "auto",
+  },
+  secondaryItem: {
+    flexBasis: "48%",
+    flexGrow: 1,
+  },
 });

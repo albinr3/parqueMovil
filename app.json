@@ -19,9 +19,6 @@
         "backgroundColor": "#EE8600"
       }
     },
-    "plugins": ["expo-secure-store", "expo-sqlite"],
-    "extra": {
-      "apiBaseUrl": "http://10.0.2.2:3000"
-    }
+    "plugins": ["expo-secure-store", "expo-sqlite"]
   }
 }

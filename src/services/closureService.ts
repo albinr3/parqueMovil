@@ -4,11 +4,14 @@ const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const queueClosureSync = async (closure: unknown, closureId: string) => {
   const db = await getDb();
+  const queueId = createId();
 
   await db.runAsync(
     "INSERT INTO sync_queue(id, entity_type, entity_id, action, payload, processed) VALUES (?, 'closure', ?, 'create', ?, 0)",
-    [createId(), closureId, JSON.stringify(closure)]
+    [queueId, closureId, JSON.stringify(closure)]
   );
+
+  console.log("[SYNC][QUEUE] closure_enqueued", { queueId, closureId, action: "create" });
 };
 
 export const getShiftSummary = async () => {
@@ -90,6 +93,11 @@ export const createShiftClosure = async (userId: string, notes?: string) => {
   );
 
   await queueClosureSync(closure, closure.id);
+  console.log("[SYNC][CLOSURE] created_and_queued", {
+    closureId: closure.id,
+    totalTickets: closure.totalTickets,
+    totalAmount: closure.totalAmount,
+  });
 
   return closure;
 };
