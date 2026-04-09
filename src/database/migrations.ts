@@ -48,4 +48,10 @@ export const runMigrations = async () => {
       ["last_ticket_number", "0"]
     );
   }
+
+  // Limpia usuarios legacy sembrados en versiones antiguas.
+  await db.runAsync(
+    "DELETE FROM users WHERE id IN (?, ?)",
+    ["emp-juan", "emp-pedro"]
+  );
 };

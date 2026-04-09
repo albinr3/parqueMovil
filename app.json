@@ -22,7 +22,11 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [
@@ -39,6 +43,13 @@
       "eas": {
         "projectId": "1b16374c-4e41-4fbd-b605-488728b1a47d"
       }
-    }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1b16374c-4e41-4fbd-b605-488728b1a47d"
+    },
+    "ios": {}
   }
 }

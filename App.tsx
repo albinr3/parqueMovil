@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Provider as PaperProvider } from "react-native-paper";
 import { ActivityIndicator, AppState, Platform, View } from "react-native";
 import * as NavigationBar from "expo-navigation-bar";
+import * as Updates from "expo-updates";
 import { runMigrations } from "./src/database/migrations";
 import { AppNavigator } from "./src/navigation/AppNavigator";
 import { useAuthStore } from "./src/stores/authStore";
@@ -54,6 +55,24 @@ export default function App() {
   const loadConfig = useConfigStore((state) => state.loadConfig);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduledLogoutAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const checkOtaUpdateOnLaunch = async () => {
+      if (__DEV__) return;
+      if (!Updates.isEnabled) return;
+
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (!update.isAvailable) return;
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+      } catch {
+        // Si falla OTA, la app sigue con el bundle actual.
+      }
+    };
+
+    void checkOtaUpdateOnLaunch();
+  }, []);
 
   useEffect(() => {
     runMigrations()

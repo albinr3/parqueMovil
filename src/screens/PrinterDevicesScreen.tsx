@@ -55,7 +55,24 @@ async function requestBluetoothPermissions(): Promise<{
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         ]
         : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
-    const granted = await PermissionsAndroid.requestMultiple(permissions as never);
+
+    const checkResults = await Promise.all(
+      permissions.map(async (permission) => ({
+        permission,
+        granted: await PermissionsAndroid.check(permission as never),
+      }))
+    );
+    const missingPermissions = checkResults
+      .filter((entry) => !entry.granted)
+      .map((entry) => entry.permission);
+
+    if (missingPermissions.length === 0) {
+      return { granted: true, blocked: false };
+    }
+
+    const granted = await PermissionsAndroid.requestMultiple(
+      missingPermissions as never
+    );
 
     const denied = Object.entries(granted).filter(
       ([, status]) => status !== PermissionsAndroid.RESULTS.GRANTED
