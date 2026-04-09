@@ -19,6 +19,10 @@ export const DEFAULT_PARKING_CONFIG = {
   parkingName: DEFAULT_PARKING_NAME,
   normalRate: DEFAULT_RATES.normal,
   lostTicketRate: DEFAULT_RATES.lost,
+  shift1Start: "06:00",
+  shift1End: "14:00",
+  shift2Start: "14:00",
+  shift2End: "22:00",
   ticketHeader: "Conserve su ticket.",
 };
 

@@ -3,6 +3,15 @@ import { Ticket, TicketStatus } from "../types";
 import { requestSync } from "./syncService";
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const SHIFT_CLOSED_ERROR_CODE = "SHIFT_CLOSED_FOR_TODAY";
+
+export class ShiftClosedForTodayError extends Error {
+  code = SHIFT_CLOSED_ERROR_CODE;
+
+  constructor() {
+    super(SHIFT_CLOSED_ERROR_CODE);
+  }
+}
 
 const queueSync = async (
   entityType: "ticket" | "closure",
@@ -76,6 +85,15 @@ export const createTicket = async (
   }
 
   const db = await getDb();
+  const closureToday = await db.getFirstAsync<{ total: number }>(
+    `SELECT COUNT(*) as total
+     FROM shift_closures
+     WHERE date(datetime(end_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
+  );
+  if ((closureToday?.total ?? 0) > 0) {
+    throw new ShiftClosedForTodayError();
+  }
+
   const ticketNumber = await getNextTicketNumber();
   const id = createId();
   const entryTime = new Date().toISOString();
@@ -136,6 +154,19 @@ export const getActiveTicketByNumber = async (
   const row = await db.getFirstAsync<Ticket>(
     `${mapTicketSelect}
      WHERE ticket_number = ? AND status = 'ACTIVE'`,
+    [ticketNumber]
+  );
+
+  return row ?? null;
+};
+
+export const getTicketByNumber = async (
+  ticketNumber: number
+): Promise<Ticket | null> => {
+  const db = await getDb();
+  const row = await db.getFirstAsync<Ticket>(
+    `${mapTicketSelect}
+     WHERE ticket_number = ?`,
     [ticketNumber]
   );
 
@@ -228,8 +259,18 @@ export const registerLostTicketExit = async (
   return updated;
 };
 
-export const listTicketsByCurrentShift = async () => {
+export const listTicketsByCurrentShift = async (userId?: string) => {
   const db = await getDb();
+
+  if (userId?.trim()) {
+    return db.getAllAsync<Ticket>(
+      `${mapTicketSelect}
+       WHERE date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))
+         AND user_id = ?
+       ORDER BY entry_time DESC`,
+      [userId.trim()]
+    );
+  }
 
   return db.getAllAsync<Ticket>(
     `${mapTicketSelect}
@@ -238,14 +279,23 @@ export const listTicketsByCurrentShift = async () => {
   );
 };
 
-export const countActiveTickets = async () => {
+export const countActiveTickets = async (userId?: string) => {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COUNT(*) as total
-     FROM tickets
-     WHERE status = 'ACTIVE'
-       AND date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
-  );
+  const row = userId?.trim()
+    ? await db.getFirstAsync<{ total: number }>(
+      `SELECT COUNT(*) as total
+       FROM tickets
+       WHERE status = 'ACTIVE'
+         AND date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))
+         AND user_id = ?`,
+      [userId.trim()]
+    )
+    : await db.getFirstAsync<{ total: number }>(
+      `SELECT COUNT(*) as total
+       FROM tickets
+       WHERE status = 'ACTIVE'
+         AND date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
+    );
 
   return row?.total ?? 0;
 };

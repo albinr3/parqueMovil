@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Text, TextInput } from "react-native-paper";
 import { useAuthStore } from "../stores/authStore";
-import { createShiftClosure, getShiftSummary } from "../services/closureService";
+import {
+  createShiftClosure,
+  getShiftSummary,
+  hasShiftClosureToday,
+} from "../services/closureService";
 import { PrimaryAction } from "../components/PrimaryAction";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { SectionCard } from "../components/SectionCard";
@@ -23,11 +28,17 @@ export const ClosureScreen = () => {
     lostAmount: 0,
     pendingTickets: 0,
   });
+  const [alreadyClosedToday, setAlreadyClosedToday] = useState(false);
   const { showMessage } = useFeedback();
 
-  useEffect(() => {
-    getShiftSummary().then(setSummary).catch(() => undefined);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      Promise.all([
+        getShiftSummary().then(setSummary),
+        hasShiftClosureToday().then(setAlreadyClosedToday),
+      ]).catch(() => undefined);
+    }, [])
+  );
 
   const refreshSummary = async () => {
     const nextSummary = await getShiftSummary();
@@ -36,6 +47,10 @@ export const ClosureScreen = () => {
 
   const onCloseShift = async () => {
     if (!user || loading) return;
+    if (alreadyClosedToday) {
+      showMessage({ text: "El cierre de caja de hoy ya fue realizado.", type: "warning" });
+      return;
+    }
 
     Alert.alert("Confirmar cierre", "Se guardará el cierre de caja del turno actual.", [
       { text: "Cancelar", style: "cancel" },
@@ -55,6 +70,7 @@ export const ClosureScreen = () => {
       await createShiftClosure(user.id, notes.trim());
       setNotes("");
       await refreshSummary();
+      setAlreadyClosedToday(true);
       showMessage({ text: "Cierre guardado correctamente", type: "success" });
     } catch {
       showMessage({ text: "No se pudo guardar el cierre", type: "error" });
@@ -109,7 +125,7 @@ export const ClosureScreen = () => {
         icon="check-decagram-outline"
         label="Confirmar cierre"
         loading={loading}
-        disabled={loading}
+        disabled={loading || alreadyClosedToday}
         onPress={onCloseShift}
       />
     </ScreenContainer>

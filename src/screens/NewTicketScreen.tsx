@@ -6,6 +6,7 @@ import { RootStackParamList } from "../navigation/AppNavigator";
 import { useAuthStore } from "../stores/authStore";
 import { useConfigStore } from "../stores/configStore";
 import { useTicketStore } from "../stores/ticketStore";
+import { ShiftClosedForTodayError } from "../services/ticketService";
 import { buildTicketPrintText, getTicketBarcodeValue } from "../utils/ticketPrint";
 import { printTextWithBarcode } from "../services/printerService";
 import { PrimaryAction } from "../components/PrimaryAction";
@@ -101,8 +102,15 @@ export const NewTicketScreen = ({ navigation }: Props) => {
 
       setPlate("");
       timeoutRef.current = setTimeout(() => navigation.goBack(), 900);
-    } catch {
-      showMessage({ text: "No se pudo crear el ticket", type: "error" });
+    } catch (error) {
+      if (error instanceof ShiftClosedForTodayError) {
+        showMessage({
+          text: "Ya se realizó el cierre de caja de hoy. No se pueden crear más tickets.",
+          type: "warning",
+        });
+      } else {
+        showMessage({ text: "No se pudo crear el ticket", type: "error" });
+      }
     } finally {
       setLoadingAction(null);
     }

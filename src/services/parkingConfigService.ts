@@ -3,11 +3,16 @@ import { API_BASE_URL, DEFAULT_PARKING_CONFIG } from "../config/constants";
 import { getDb } from "../database/db";
 
 const PARKING_CONFIG_META_KEY = "parking_config_cache";
+const PARKING_CONFIG_LAST_FETCH_DATE_META_KEY = "parking_config_last_fetch_date";
 
 export type ParkingConfig = {
   parkingName: string;
   normalRate: number;
   lostTicketRate: number;
+  shift1Start: string;
+  shift1End: string;
+  shift2Start: string;
+  shift2End: string;
   ticketHeader: string;
   source: "api" | "cache" | "fallback";
 };
@@ -15,6 +20,19 @@ export type ParkingConfig = {
 const clampRate = (value: unknown, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : fallback;
+};
+
+const normalizeShiftTime = (value: unknown, fallback: string) => {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim();
+  return /^\d{2}:\d{2}$/.test(normalized) ? normalized : fallback;
+};
+
+const getLocalDateKey = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 };
 
 const normalizeConfig = (
@@ -34,6 +52,16 @@ const normalizeConfig = (
       raw.lostTicketRate,
       DEFAULT_PARKING_CONFIG.lostTicketRate
     ),
+    shift1Start: normalizeShiftTime(
+      raw.shift1Start,
+      DEFAULT_PARKING_CONFIG.shift1Start
+    ),
+    shift1End: normalizeShiftTime(raw.shift1End, DEFAULT_PARKING_CONFIG.shift1End),
+    shift2Start: normalizeShiftTime(
+      raw.shift2Start,
+      DEFAULT_PARKING_CONFIG.shift2Start
+    ),
+    shift2End: normalizeShiftTime(raw.shift2End, DEFAULT_PARKING_CONFIG.shift2End),
     ticketHeader:
       typeof raw.ticketHeader === "string" && raw.ticketHeader.trim().length > 0
         ? raw.ticketHeader.trim()
@@ -52,6 +80,25 @@ const saveCachedParkingConfig = async (
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     [PARKING_CONFIG_META_KEY, JSON.stringify(config)]
   );
+};
+
+const saveLastFetchDate = async (dateKey: string): Promise<void> => {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO app_meta(key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [PARKING_CONFIG_LAST_FETCH_DATE_META_KEY, dateKey]
+  );
+};
+
+const getLastFetchDate = async (): Promise<string | null> => {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ value: string }>(
+    "SELECT value FROM app_meta WHERE key = ?",
+    [PARKING_CONFIG_LAST_FETCH_DATE_META_KEY]
+  );
+  return row?.value ?? null;
 };
 
 export const getCachedParkingConfig = async (): Promise<ParkingConfig | null> => {
@@ -82,8 +129,13 @@ const fetchRemoteParkingConfig = async (): Promise<ParkingConfig> => {
     parkingName: normalized.parkingName,
     normalRate: normalized.normalRate,
     lostTicketRate: normalized.lostTicketRate,
+    shift1Start: normalized.shift1Start,
+    shift1End: normalized.shift1End,
+    shift2Start: normalized.shift2Start,
+    shift2End: normalized.shift2End,
     ticketHeader: normalized.ticketHeader,
   });
+  await saveLastFetchDate(getLocalDateKey());
 
   return normalized;
 };
@@ -93,20 +145,19 @@ export const loadParkingConfig = async ({
 }: {
   forceRefresh?: boolean;
 } = {}): Promise<ParkingConfig> => {
-  if (!forceRefresh) {
+  const today = getLocalDateKey();
+  const cached = await getCachedParkingConfig();
+  const lastFetchDate = await getLastFetchDate();
+  const shouldFetchRemote = forceRefresh || lastFetchDate !== today || !cached;
+
+  if (shouldFetchRemote) {
     try {
       return await fetchRemoteParkingConfig();
     } catch {
-      const cached = await getCachedParkingConfig();
       if (cached) return cached;
     }
-  } else {
-    try {
-      return await fetchRemoteParkingConfig();
-    } catch {
-      const cached = await getCachedParkingConfig();
-      if (cached) return cached;
-    }
+  } else if (cached) {
+    return cached;
   }
 
   return {

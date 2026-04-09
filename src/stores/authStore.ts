@@ -5,6 +5,7 @@ import {
   listActiveUsers,
   readSession,
   saveSession,
+  syncUsersFromApi,
   validateUserPin,
 } from "../services/authService";
 
@@ -22,8 +23,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   users: [],
   loading: true,
   init: async () => {
-    const [session, activeUsers] = await Promise.all([readSession(), listActiveUsers()]);
-    set({ user: session, users: activeUsers, loading: false });
+    const session = await readSession();
+    await syncUsersFromApi().catch(() => {
+      // Si la API falla, seguimos con empleados locales.
+    });
+    const activeUsers = await listActiveUsers();
+    const sessionUser = session && activeUsers.some((u) => u.id === session.id) ? session : null;
+
+    if (session && !sessionUser) {
+      await clearSession();
+    }
+
+    set({ user: sessionUser, users: activeUsers, loading: false });
   },
   login: async (userId, pin) => {
     const user = await validateUserPin(userId, pin);

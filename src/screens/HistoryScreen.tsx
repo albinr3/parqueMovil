@@ -5,12 +5,14 @@ import { Text } from "react-native-paper";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { SecondaryAction } from "../components/SecondaryAction";
 import { SectionCard } from "../components/SectionCard";
+import { useAuthStore } from "../stores/authStore";
 import { useTicketStore } from "../stores/ticketStore";
 import { TicketCard } from "../components/TicketCard";
 import { appSpacing } from "../theme/theme";
 import { useFeedback } from "../contexts/FeedbackContext";
 
 export const HistoryScreen = () => {
+  const user = useAuthStore((state) => state.user);
   const tickets = useTicketStore((state) => state.tickets);
   const loadToday = useTicketStore((state) => state.loadToday);
   const [loading, setLoading] = useState(false);
@@ -19,13 +21,13 @@ export const HistoryScreen = () => {
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
-      await loadToday();
+      await loadToday(user?.id);
     } catch {
       showMessage({ text: "No se pudo cargar el historial", type: "error" });
     } finally {
       setLoading(false);
     }
-  }, [loadToday, showMessage]);
+  }, [loadToday, showMessage, user?.id]);
 
   useFocusEffect(
     useCallback(() => {

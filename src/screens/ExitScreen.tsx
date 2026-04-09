@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Modal, StyleSheet, View } from "react-native";
+import { Alert, Keyboard, Modal, StyleSheet, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Chip, Text, TextInput } from "react-native-paper";
 import { useConfigStore } from "../stores/configStore";
@@ -21,7 +21,7 @@ const extractTicketNumber = (raw: string) => {
 };
 
 export const ExitScreen = () => {
-  const findActiveByNumber = useTicketStore((state) => state.findActiveByNumber);
+  const findByNumber = useTicketStore((state) => state.findByNumber);
   const findActiveByPlate = useTicketStore((state) => state.findActiveByPlate);
   const registerExit = useTicketStore((state) => state.registerExit);
   const registerLostExit = useTicketStore((state) => state.registerLostExit);
@@ -31,6 +31,9 @@ export const ExitScreen = () => {
   const [ticketNumber, setTicketNumber] = useState("");
   const [plateForLost, setPlateForLost] = useState("");
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [ticketSearchOrigin, setTicketSearchOrigin] = useState<"number" | "plate" | null>(
+    null
+  );
   const [searching, setSearching] = useState(false);
   const [processingType, setProcessingType] = useState<"normal" | "lost" | null>(
     null
@@ -50,13 +53,35 @@ export const ExitScreen = () => {
   ) => {
     try {
       setSearching(true);
-      const found = await findActiveByNumber(number);
+      const found = await findByNumber(number);
+
+      if (!found) {
+        setTicket(null);
+        setTicketSearchOrigin(null);
+        showMessage({
+          text: "No existe ticket con ese numero",
+          type: "warning",
+        });
+        return;
+      }
+
+      if (found.status !== "ACTIVE") {
+        setTicket(null);
+        setTicketSearchOrigin(null);
+        showMessage({
+          text: `El ticket #${found.ticketNumber
+            .toString()
+            .padStart(4, "0")} ya tiene salida registrada.`,
+          type: "warning",
+        });
+        return;
+      }
+
       setTicket(found);
+      setTicketSearchOrigin("number");
       showMessage({
-        text: found
-          ? `Ticket #${found.ticketNumber.toString().padStart(4, "0")} encontrado`
-          : "No existe ticket activo con ese numero",
-        type: found ? "success" : "warning",
+        text: `Ticket #${found.ticketNumber.toString().padStart(4, "0")} encontrado`,
+        type: "success",
       });
     } catch {
       showMessage({
@@ -73,6 +98,7 @@ export const ExitScreen = () => {
 
   const onSearch = async () => {
     if (searching || processingType) return;
+    Keyboard.dismiss();
 
     if (!ticketNumber.trim()) {
       showMessage({ text: "Ingresa el numero de ticket", type: "warning" });
@@ -163,6 +189,7 @@ export const ExitScreen = () => {
         type: "success",
       });
       setTicket(null);
+      setTicketSearchOrigin(null);
       setTicketNumber("");
       setPlateForLost("");
     } catch {
@@ -206,6 +233,7 @@ export const ExitScreen = () => {
         type: "success",
       });
       setTicket(null);
+      setTicketSearchOrigin(null);
       setTicketNumber("");
       setPlateForLost("");
     } catch {
@@ -244,6 +272,7 @@ export const ExitScreen = () => {
       }
 
       setTicket(found);
+      setTicketSearchOrigin("plate");
       setTicketNumber(String(found.ticketNumber));
       confirmLostExit(found);
     } catch {
@@ -255,6 +284,8 @@ export const ExitScreen = () => {
       setSearching(false);
     }
   };
+
+  const isLostSectionDisabled = ticket !== null && ticketSearchOrigin === "number";
 
   return (
     <ScreenContainer scroll contentContainerStyle={styles.container}>
@@ -321,12 +352,14 @@ export const ExitScreen = () => {
         <SectionCard
           title="Ticket perdido sin ticket fisico"
           subtitle="Si no tienes numero, busca por placa y aplica recargo"
+          style={isLostSectionDisabled ? styles.lostSectionDisabled : undefined}
         >
           <TextInput
             mode="outlined"
             label="Placa"
             value={plateForLost}
             onChangeText={(value) => setPlateForLost(value.toUpperCase())}
+            disabled={isLostSectionDisabled}
             autoCapitalize="characters"
             maxLength={10}
             placeholder="Ej: AB-1234"
@@ -337,7 +370,7 @@ export const ExitScreen = () => {
             textColor="#B42318"
             style={styles.lostButton}
             loading={processingType === "lost"}
-            disabled={searching || processingType !== null}
+            disabled={isLostSectionDisabled || searching || processingType !== null}
             onPress={() => void onLostAction()}
           />
         </SectionCard>
@@ -420,5 +453,8 @@ const styles = StyleSheet.create({
     paddingTop: appSpacing.md,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
+  },
+  lostSectionDisabled: {
+    opacity: 0.6,
   },
 });

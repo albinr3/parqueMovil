@@ -5,6 +5,7 @@ import {
   createTicket,
   getActiveTicketByPlate,
   getActiveTicketByNumber,
+  getTicketByNumber,
   listTicketsByCurrentShift,
   registerLostTicketExit,
   registerTicketExit,
@@ -13,8 +14,10 @@ import {
 type TicketState = {
   tickets: Ticket[];
   activeTickets: number;
-  loadToday: () => Promise<void>;
+  currentUserFilterId: string | null;
+  loadToday: (userId?: string) => Promise<void>;
   addTicket: (userId: string, plate: string, normalRate: number) => Promise<Ticket>;
+  findByNumber: (ticketNumber: number) => Promise<Ticket | null>;
   findActiveByNumber: (ticketNumber: number) => Promise<Ticket | null>;
   findActiveByPlate: (plate: string) => Promise<Ticket | null>;
   registerExit: (ticketId: string) => Promise<Ticket | null>;
@@ -24,19 +27,22 @@ type TicketState = {
 export const useTicketStore = create<TicketState>((set, get) => ({
   tickets: [],
   activeTickets: 0,
-  loadToday: async () => {
+  currentUserFilterId: null,
+  loadToday: async (userId) => {
+    const nextFilterUserId = userId ?? get().currentUserFilterId;
     const [tickets, activeCount] = await Promise.all([
-      listTicketsByCurrentShift(),
-      countActiveTickets(),
+      listTicketsByCurrentShift(nextFilterUserId ?? undefined),
+      countActiveTickets(nextFilterUserId ?? undefined),
     ]);
 
-    set({ tickets, activeTickets: activeCount });
+    set({ tickets, activeTickets: activeCount, currentUserFilterId: nextFilterUserId ?? null });
   },
   addTicket: async (userId, plate, normalRate) => {
     const ticket = await createTicket(userId, plate, normalRate);
     await get().loadToday();
     return ticket;
   },
+  findByNumber: async (ticketNumber) => getTicketByNumber(ticketNumber),
   findActiveByNumber: async (ticketNumber) => getActiveTicketByNumber(ticketNumber),
   findActiveByPlate: async (plate) => getActiveTicketByPlate(plate),
   registerExit: async (ticketId) => {

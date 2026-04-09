@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -13,6 +13,7 @@ import { useAuthStore } from "../stores/authStore";
 import { useTicketStore } from "../stores/ticketStore";
 import { appSpacing } from "../theme/theme";
 import { formatCurrency } from "../utils/format";
+import { hasShiftClosureToday } from "../services/closureService";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -22,11 +23,15 @@ export const HomeScreen = ({ navigation }: Props) => {
   const loadToday = useTicketStore((state) => state.loadToday);
   const tickets = useTicketStore((state) => state.tickets);
   const activeTickets = useTicketStore((state) => state.activeTickets);
+  const [isShiftClosedToday, setIsShiftClosedToday] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      loadToday().catch(() => undefined);
-    }, [loadToday])
+      Promise.all([
+        loadToday(user?.id),
+        hasShiftClosureToday().then(setIsShiftClosedToday),
+      ]).catch(() => undefined);
+    }, [loadToday, user?.id])
   );
 
   const totalRecaudado = tickets.reduce((sum, t) => sum + (t.amountCharged ?? 0), 0);
@@ -56,9 +61,21 @@ export const HomeScreen = ({ navigation }: Props) => {
       </SectionCard>
 
       <View style={styles.mainActions}>
-        <PrimaryAction icon="ticket" label="Nuevo Ticket" buttonColor="#1F7A3D" onPress={() => navigation.navigate("NewTicket")} />
+        <PrimaryAction
+          icon="ticket"
+          label="Nuevo Ticket"
+          buttonColor="#1F7A3D"
+          disabled={isShiftClosedToday}
+          onPress={() => navigation.navigate("NewTicket")}
+        />
         <PrimaryAction icon="gate-open" label="Registrar Salida" buttonColor="#D97706" onPress={() => navigation.navigate("Exit")} />
-        <PrimaryAction icon="clipboard-check-outline" label="Cerrar Caja" buttonColor="#1D4ED8" onPress={() => navigation.navigate("Closure")} />
+        <PrimaryAction
+          icon="clipboard-check-outline"
+          label="Cerrar Caja"
+          buttonColor="#1D4ED8"
+          disabled={isShiftClosedToday}
+          onPress={() => navigation.navigate("Closure")}
+        />
       </View>
 
       <View style={styles.footerActions}>

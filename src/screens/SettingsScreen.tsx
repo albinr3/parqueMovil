@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Text } from "react-native-paper";
@@ -8,15 +8,21 @@ import { ScreenContainer } from "../components/ScreenContainer";
 import { SecondaryAction } from "../components/SecondaryAction";
 import { SectionCard } from "../components/SectionCard";
 import { getSavedPrinter } from "../services/printerService";
+import { resetLocalDatabase } from "../services/maintenanceService";
+import { useAuthStore } from "../stores/authStore";
 import { appSpacing } from "../theme/theme";
+import { useFeedback } from "../contexts/FeedbackContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export const SettingsScreen = ({ navigation }: Props) => {
+  const logout = useAuthStore((state) => state.logout);
   const [printerName, setPrinterName] = useState("Sin impresora conectada");
   const [printerAddress, setPrinterAddress] = useState(
     "Abre la configuracion para conectar una impresora Bluetooth."
   );
+  const [resettingDb, setResettingDb] = useState(false);
+  const { showMessage } = useFeedback();
 
   const refreshPrinterStatus = useCallback(async () => {
     const printer = await getSavedPrinter();
@@ -37,6 +43,57 @@ export const SettingsScreen = ({ navigation }: Props) => {
     }, [refreshPrinterStatus])
   );
 
+  const onResetDatabase = () => {
+    if (resettingDb) return;
+
+    Alert.alert(
+      "Blanquear base local",
+      "Se eliminarán TODOS los datos locales (tickets, cierres, cola de sync, usuarios y configuración cacheada). El próximo ticket volverá a #1.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Borrar todo",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Confirmación final",
+              "¿Seguro que quieres borrar todo y empezar de cero?",
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Sí, borrar",
+                  style: "destructive",
+                  onPress: () => void confirmResetDatabase(),
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmResetDatabase = async () => {
+    if (resettingDb) return;
+
+    try {
+      setResettingDb(true);
+      await resetLocalDatabase();
+      await logout();
+      showMessage({
+        text: "Base local blanqueada. Se cerró sesión.",
+        type: "success",
+      });
+    } catch {
+      showMessage({
+        text: "No se pudo blanquear la base local.",
+        type: "error",
+      });
+    } finally {
+      setResettingDb(false);
+    }
+  };
+
   return (
     <ScreenContainer contentContainerStyle={styles.container}>
       <Text variant="headlineSmall">Configuración</Text>
@@ -54,6 +111,17 @@ export const SettingsScreen = ({ navigation }: Props) => {
             onPress={() => navigation.navigate("Printers")}
           />
         </View>
+      </SectionCard>
+
+      <SectionCard title="Mantenimiento" subtitle="Acciones de sistema">
+        <SecondaryAction
+          icon="database-remove-outline"
+          label="Blanquear base local"
+          textColor="#B42318"
+          loading={resettingDb}
+          disabled={resettingDb}
+          onPress={onResetDatabase}
+        />
       </SectionCard>
     </ScreenContainer>
   );
