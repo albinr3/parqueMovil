@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Provider as PaperProvider } from "react-native-paper";
-import { ActivityIndicator, AppState, Platform, View } from "react-native";
-import * as NavigationBar from "expo-navigation-bar";
-import * as Updates from "expo-updates";
+import { ActivityIndicator, AppState, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { runMigrations } from "./src/database/migrations";
 import { AppNavigator } from "./src/navigation/AppNavigator";
 import { useAuthStore } from "./src/stores/authStore";
@@ -11,6 +10,8 @@ import { useSyncStore } from "./src/stores/syncStore";
 import { FeedbackProvider } from "./src/contexts/FeedbackContext";
 import { appTheme } from "./src/theme/theme";
 import { ParkingConfig } from "./src/services/parkingConfigService";
+import { OtaUpdateBanner } from "./src/components/OtaUpdateBanner";
+import { useOtaUpdates } from "./src/services/updates/useOtaUpdates";
 
 const toShiftTimestamp = (time: string, baseDate: Date) => {
   const match = /^(\d{2}):(\d{2})$/.exec(time.trim());
@@ -55,24 +56,11 @@ export default function App() {
   const loadConfig = useConfigStore((state) => state.loadConfig);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduledLogoutAtRef = useRef<number | null>(null);
+  const otaUpdates = useOtaUpdates();
 
   useEffect(() => {
-    const checkOtaUpdateOnLaunch = async () => {
-      if (__DEV__) return;
-      if (!Updates.isEnabled) return;
-
-      try {
-        const update = await Updates.checkForUpdateAsync();
-        if (!update.isAvailable) return;
-        await Updates.fetchUpdateAsync();
-        await Updates.reloadAsync();
-      } catch {
-        // Si falla OTA, la app sigue con el bundle actual.
-      }
-    };
-
-    void checkOtaUpdateOnLaunch();
-  }, []);
+    void otaUpdates.checkForUpdates({ silentIfOffline: true });
+  }, [otaUpdates.checkForUpdates]);
 
   useEffect(() => {
     runMigrations()
@@ -83,37 +71,6 @@ export default function App() {
         // Evita romper render inicial; errores se manejaran en UI/log.
       });
   }, [initAuth, initSync, loadConfig]);
-
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
-
-    const hideNavigationBar = async () => {
-      try {
-        await NavigationBar.setVisibilityAsync("hidden");
-      } catch {
-        // Ignora errores del sistema/dispositivo.
-      }
-    };
-
-    void hideNavigationBar();
-
-    const appStateSub = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        void hideNavigationBar();
-      }
-    });
-
-    const visibilitySub = NavigationBar.addVisibilityListener(({ visibility }) => {
-      if (visibility === "visible") {
-        void hideNavigationBar();
-      }
-    });
-
-    return () => {
-      appStateSub.remove();
-      visibilitySub.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (logoutTimerRef.current) {
@@ -152,6 +109,9 @@ export default function App() {
     if (!user) return;
 
     const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void otaUpdates.checkForUpdates({ silentIfOffline: true });
+      }
       if (state !== "active") return;
       const scheduledLogoutAt = scheduledLogoutAtRef.current;
       if (!scheduledLogoutAt) return;
@@ -163,19 +123,30 @@ export default function App() {
     return () => {
       appStateSub.remove();
     };
-  }, [logout, user?.id]);
+  }, [logout, otaUpdates.checkForUpdates, user?.id]);
 
   return (
-    <PaperProvider theme={appTheme}>
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator />
-        </View>
-      ) : (
-        <FeedbackProvider>
-          <AppNavigator />
-        </FeedbackProvider>
-      )}
-    </PaperProvider>
+    <SafeAreaProvider>
+      <PaperProvider theme={appTheme}>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+            <ActivityIndicator />
+          </View>
+        ) : (
+          <FeedbackProvider>
+            <AppNavigator />
+            <OtaUpdateBanner
+              visible={otaUpdates.visible}
+              status={otaUpdates.status}
+              errorMessage={otaUpdates.errorMessage}
+              onCheckNow={otaUpdates.checkForUpdates}
+              onDownloadNow={otaUpdates.downloadUpdate}
+              onReloadNow={otaUpdates.reloadApp}
+              onDismiss={otaUpdates.dismiss}
+            />
+          </FeedbackProvider>
+        )}
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }
