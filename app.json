@@ -11,13 +11,19 @@
       "resizeMode": "contain",
       "backgroundColor": "#EE8600"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.badia.parqueomoto",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#EE8600"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-secure-store",
@@ -28,6 +34,11 @@
           "cameraPermission": "Permite escanear codigos de barras de tickets."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1b16374c-4e41-4fbd-b605-488728b1a47d"
+      }
+    }
   }
 }

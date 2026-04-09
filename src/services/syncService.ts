@@ -4,7 +4,6 @@ import { API_BASE_URL, SYNC_INTERVAL_MS } from "../config/constants";
 import { getDb } from "../database/db";
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
-const SYNC_LOG_PREFIX = "[SYNC]";
 let syncInFlight: Promise<{
   processed: number;
   skipped: boolean;
@@ -30,17 +29,9 @@ type SyncApiResponse = {
   failedEventIds?: string[];
 };
 
-const log = (...args: unknown[]) => {
-  console.log(SYNC_LOG_PREFIX, ...args);
-};
-
-const warn = (...args: unknown[]) => {
-  console.warn(SYNC_LOG_PREFIX, ...args);
-};
-
-const errorLog = (...args: unknown[]) => {
-  console.error(SYNC_LOG_PREFIX, ...args);
-};
+const log = (..._args: unknown[]) => undefined;
+const warn = (..._args: unknown[]) => undefined;
+const errorLog = (..._args: unknown[]) => undefined;
 
 const notifySyncCompleted = (result: SyncResult) => {
   const event: SyncCompletedEvent = {

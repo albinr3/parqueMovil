@@ -27,7 +27,6 @@ const queueSync = async (
     [queueId, entityType, entityId, action, JSON.stringify(payload)]
   );
 
-  console.log("[SYNC][QUEUE] enqueued", { queueId, entityType, entityId, action });
   requestSync(`queue_${entityType}_${action}`);
 };
 
@@ -136,12 +135,6 @@ export const createTicket = async (
   };
 
   await queueSync("ticket", id, "create", ticket);
-  console.log("[SYNC][TICKET] created_and_queued", {
-    ticketId: id,
-    ticketNumber,
-    plate: ticket.plate,
-    entryAmountCharged,
-  });
 
   return ticket;
 };
@@ -212,11 +205,6 @@ export const registerTicketExit = async (ticketId: string) => {
 
   if (updated) {
     await queueSync("ticket", ticketId, "update", updated);
-    console.log("[SYNC][TICKET] updated_and_queued", {
-      ticketId,
-      status: updated.status,
-      amountCharged: updated.amountCharged,
-    });
   }
 
   return updated;
@@ -248,12 +236,6 @@ export const registerLostTicketExit = async (
 
   if (updated) {
     await queueSync("ticket", ticketId, "update", updated);
-    console.log("[SYNC][TICKET] updated_and_queued", {
-      ticketId,
-      status: updated.status,
-      amountCharged: updated.amountCharged,
-      lostExtraCharged: updated.lostExtraCharged,
-    });
   }
 
   return updated;

@@ -106,7 +106,7 @@ export const SettingsScreen = ({ navigation }: Props) => {
             <Text style={styles.paperHint}>Papel configurado: 58 mm</Text>
           </View>
           <SecondaryAction
-            icon="printer-cog"
+            icon="printer-outline"
             label="Configurar"
             onPress={() => navigation.navigate("Printers")}
           />

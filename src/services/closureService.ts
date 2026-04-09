@@ -12,7 +12,6 @@ const queueClosureSync = async (closure: unknown, closureId: string) => {
     [queueId, closureId, JSON.stringify(closure)]
   );
 
-  console.log("[SYNC][QUEUE] closure_enqueued", { queueId, closureId, action: "create" });
   requestSync("queue_closure_create");
 };
 
@@ -119,11 +118,6 @@ export const createShiftClosure = async (userId: string, notes?: string) => {
   );
 
   await queueClosureSync(closure, closure.id);
-  console.log("[SYNC][CLOSURE] created_and_queued", {
-    closureId: closure.id,
-    totalTickets: closure.totalTickets,
-    totalAmount: closure.totalAmount,
-  });
 
   return closure;
 };
