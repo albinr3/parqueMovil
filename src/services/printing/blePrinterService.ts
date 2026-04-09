@@ -80,9 +80,9 @@ export const printBleText = async (
   }
 
   await new Promise<void>((resolve, reject) => {
-    BLEPrinter.printBill(
+    BLEPrinter.printText(
       text,
-      undefined,
+      { keepConnection: false } as any,
       () => resolve(),
       (error) => reject(error)
     );
