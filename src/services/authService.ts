@@ -57,46 +57,70 @@ export const syncUsersFromApi = async (): Promise<number> => {
   const payload = Array.isArray(response.data) ? response.data : [];
   const db = await getDb();
   let synced = 0;
+  const remoteUserIds: string[] = [];
 
-  for (const rawUser of payload) {
-    const user = rawUser as RemoteUser;
-    const id = typeof user.id === "string" ? user.id.trim() : "";
-    const name = typeof user.name === "string" ? user.name.trim() : "";
+  await db.execAsync("BEGIN TRANSACTION;");
+  try {
+    await db.runAsync("UPDATE users SET active = 0");
 
-    if (!id || !name) continue;
+    for (const rawUser of payload) {
+      const user = rawUser as RemoteUser;
+      const id = typeof user.id === "string" ? user.id.trim() : "";
+      const name = typeof user.name === "string" ? user.name.trim() : "";
 
-    const role = user.role === "ADMIN" ? "ADMIN" : "EMPLOYEE";
-    const active = user.active === false || user.active === 0 ? 0 : 1;
-    const pinHash = getRemotePinHash(user);
+      if (!id || !name) continue;
+      remoteUserIds.push(id);
 
-    if (pinHash) {
+      const role = user.role === "ADMIN" ? "ADMIN" : "EMPLOYEE";
+      const active = user.active === false || user.active === 0 ? 0 : 1;
+      const pinHash = getRemotePinHash(user);
+
+      if (pinHash) {
+        await db.runAsync(
+          `INSERT INTO users(id, name, pin_hash, role, active)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             pin_hash = excluded.pin_hash,
+             role = excluded.role,
+             active = excluded.active`,
+          [id, name, pinHash, role, active]
+        );
+        synced += 1;
+        continue;
+      }
+
+      const existing = await db.getFirstAsync<{ id: string }>(
+        "SELECT id FROM users WHERE id = ?",
+        [id]
+      );
+      if (!existing) continue;
+
       await db.runAsync(
-        `INSERT INTO users(id, name, pin_hash, role, active)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name,
-           pin_hash = excluded.pin_hash,
-           role = excluded.role,
-           active = excluded.active`,
-        [id, name, pinHash, role, active]
+        `UPDATE users
+         SET name = ?, role = ?, active = ?
+         WHERE id = ?`,
+        [name, role, active, id]
       );
       synced += 1;
-      continue;
     }
 
-    const existing = await db.getFirstAsync<{ id: string }>(
-      "SELECT id FROM users WHERE id = ?",
-      [id]
-    );
-    if (!existing) continue;
+    if (remoteUserIds.length > 0) {
+      const placeholders = remoteUserIds.map(() => "?").join(", ");
+      await db.runAsync(
+        `DELETE FROM users
+         WHERE active = 0
+           AND id NOT IN (${placeholders})`,
+        remoteUserIds
+      );
+    } else {
+      await db.runAsync("DELETE FROM users WHERE active = 0");
+    }
 
-    await db.runAsync(
-      `UPDATE users
-       SET name = ?, role = ?, active = ?
-       WHERE id = ?`,
-      [name, role, active, id]
-    );
-    synced += 1;
+    await db.execAsync("COMMIT;");
+  } catch (error) {
+    await db.execAsync("ROLLBACK;");
+    throw error;
   }
 
   return synced;

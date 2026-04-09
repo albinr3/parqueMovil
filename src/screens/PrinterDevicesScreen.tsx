@@ -48,10 +48,14 @@ async function requestBluetoothPermissions(): Promise<{
   }
 
   try {
-    const granted = await PermissionsAndroid.requestMultiple([
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-    ]);
+    const permissions =
+      Platform.Version >= 31
+        ? [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        ]
+        : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+    const granted = await PermissionsAndroid.requestMultiple(permissions as never);
 
     const denied = Object.entries(granted).filter(
       ([, status]) => status !== PermissionsAndroid.RESULTS.GRANTED
@@ -110,7 +114,21 @@ export const PrinterDevicesScreen = ({ navigation }: Props) => {
   useFocusEffect(
     useCallback(() => {
       void loadSavedState();
-    }, [loadSavedState])
+      void requestBluetoothPermissions().then((permissionResult) => {
+        if (permissionResult.granted) return;
+        const message =
+          permissionResult.message ||
+          "Se necesitan permisos Bluetooth para buscar impresoras.";
+        if (permissionResult.blocked) {
+          Alert.alert("Permisos Bluetooth", message, [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Abrir ajustes", onPress: () => void Linking.openSettings() },
+          ]);
+          return;
+        }
+        showMessage({ text: message, type: "warning" });
+      });
+    }, [loadSavedState, showMessage])
   );
 
   const refreshDevices = useCallback(async () => {
