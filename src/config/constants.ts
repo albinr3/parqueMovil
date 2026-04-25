@@ -28,8 +28,10 @@ export const DEFAULT_PARKING_CONFIG = {
 
 export const SYNC_INTERVAL_MS = 30000;
 
-const configuredApiBaseUrl =
-  process.env.EXPO_PUBLIC_API_BASE_URL ??
-  "http://10.0.2.2:3000";
+const LOCAL_DEV_API_FALLBACK = "http://10.0.2.2:3000";
+const PRODUCTION_API_FALLBACK = "https://badiatours.com";
 
-export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, "");
+const configuredApiBaseUrl = String(process.env.EXPO_PUBLIC_API_BASE_URL ?? "").trim();
+const fallbackApiBaseUrl = __DEV__ ? LOCAL_DEV_API_FALLBACK : PRODUCTION_API_FALLBACK;
+
+export const API_BASE_URL = (configuredApiBaseUrl || fallbackApiBaseUrl).replace(/\/+$/, "");

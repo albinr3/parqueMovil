@@ -19,6 +19,7 @@ export type ThermalPrintResult = {
   reason?:
     | "missing_config"
     | "missing_native_module"
+    | "timeout"
     | "native_error";
   message?: string;
   warning?: string;
@@ -27,10 +28,36 @@ export type ThermalPrintResult = {
 export const CONNECTED_PRINTER_KEY = "connected_printer";
 export const PAPER_SIZE_KEY = "printer_paper_size_mm";
 export const FIXED_PAPER_SIZE = "58";
+const PRINT_TIMEOUT_MS = 6000;
+const PRINT_TIMEOUT_MESSAGE = `No se pudo imprimir en ${PRINT_TIMEOUT_MS / 1000} segundos.`;
 
 export type PaperSizeMm = "58";
 
 const normalizePaperSize = (): PaperSizeMm => FIXED_PAPER_SIZE;
+
+const createTimeoutError = () => {
+  const error = new Error(PRINT_TIMEOUT_MESSAGE);
+  (error as Error & { code?: string }).code = "PRINT_TIMEOUT";
+  return error;
+};
+
+const isPrintTimeoutError = (error: unknown): boolean => {
+  return Boolean((error as { code?: string } | null | undefined)?.code === "PRINT_TIMEOUT");
+};
+
+const withPrintTimeout = async (operation: Promise<void>): Promise<void> => {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  try {
+    await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(createTimeoutError()), PRINT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+};
 
 const toCode128Value = (value: string) => {
   const normalized = value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
@@ -141,9 +168,17 @@ export const printTicketDirect = async (
   }
 
   try {
-    await printBleText(text, printer.address);
+    await withPrintTimeout(printBleText(text, printer.address));
     return { printed: true };
   } catch (error: any) {
+    if (isPrintTimeoutError(error)) {
+      return {
+        printed: false,
+        reason: "timeout",
+        message: PRINT_TIMEOUT_MESSAGE,
+      };
+    }
+
     return {
       printed: false,
       reason: "native_error",
@@ -185,11 +220,19 @@ export const printTicketWithCode128 = async (
 
   try {
     const rawBase64 = buildEscPosCode128Base64(text, normalizedBarcode);
-    await printBleRawBase64(rawBase64, printer.address);
+    await withPrintTimeout(printBleRawBase64(rawBase64, printer.address));
     return { printed: true };
   } catch (barcodeError: any) {
+    if (isPrintTimeoutError(barcodeError)) {
+      return {
+        printed: false,
+        reason: "timeout",
+        message: PRINT_TIMEOUT_MESSAGE,
+      };
+    }
+
     try {
-      await printBleText(text, printer.address);
+      await withPrintTimeout(printBleText(text, printer.address));
       return {
         printed: true,
         warning: `Se imprimio sin barcode Code128: ${String(
@@ -197,6 +240,14 @@ export const printTicketWithCode128 = async (
         )}`,
       };
     } catch (fallbackError: any) {
+      if (isPrintTimeoutError(fallbackError)) {
+        return {
+          printed: false,
+          reason: "timeout",
+          message: PRINT_TIMEOUT_MESSAGE,
+        };
+      }
+
       return {
         printed: false,
         reason: "native_error",

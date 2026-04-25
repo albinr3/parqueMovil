@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "eas:update:preview": "eas update --channel preview --platform android --auto"
+    "eas:update:preview": "eas update --channel preview --environment preview --platform android --auto",
+    "eas:update:production": "eas update --channel production --environment production --platform android --auto"
   },
   "dependencies": {
     "@poriyaalar/react-native-thermal-receipt-printer": "^1.4.0",
