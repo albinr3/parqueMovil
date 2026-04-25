@@ -9,6 +9,7 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "eas:build:production:apk": "eas build --platform android --profile production-apk",
     "eas:update:preview": "eas update --channel preview --environment preview --platform android --auto",
     "eas:update:production": "eas update --channel production --environment production --platform android --auto"
   },
