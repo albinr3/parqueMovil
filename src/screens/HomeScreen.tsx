@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Text } from "react-native-paper";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Header } from "../components/Header";
 import { PrimaryAction } from "../components/PrimaryAction";
 import { ScreenContainer } from "../components/ScreenContainer";
@@ -18,6 +19,7 @@ import { hasShiftClosureToday } from "../services/closureService";
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
 export const HomeScreen = ({ navigation }: Props) => {
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const loadToday = useTicketStore((state) => state.loadToday);
@@ -35,9 +37,16 @@ export const HomeScreen = ({ navigation }: Props) => {
   );
 
   const totalRecaudado = tickets.reduce((sum, t) => sum + (t.amountCharged ?? 0), 0);
+  const bottomSafePadding =
+    appSpacing.md +
+    (Platform.OS === "android"
+      ? Math.max(insets.bottom, appSpacing.xl)
+      : insets.bottom);
 
   return (
-    <ScreenContainer contentContainerStyle={styles.container}>
+    <ScreenContainer
+      contentContainerStyle={[styles.container, { paddingBottom: bottomSafePadding }]}
+    >
       <Header />
 
       <SectionCard title="Turno actual" subtitle="Resumen en tiempo real del día">

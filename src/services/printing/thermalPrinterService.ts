@@ -40,14 +40,19 @@ const toCode128Value = (value: string) => {
 };
 
 const buildEscPosCode128Base64 = (text: string, barcodeValue: string) => {
-  const normalizedText = text.replace(/\r\n/g, "\n").trimEnd();
-  const textBuffer = Buffer.from(`${normalizedText}\n`, "utf8");
+  const normalizedText = text.replace(/\r\n/g, "\n");
+  const textBuffer = Buffer.from(
+    normalizedText.endsWith("\n") ? normalizedText : `${normalizedText}\n`,
+    "utf8"
+  );
+  const barcodeTopSpacing = Buffer.from([0x0a, 0x0a, 0x0a]);
   const barcodeData = Buffer.from(`{B${barcodeValue}`, "ascii");
 
   const payload = Buffer.concat([
     Buffer.from([0x1b, 0x40]), // initialize
     Buffer.from([0x1b, 0x61, 0x00]), // left align for text
     textBuffer,
+    barcodeTopSpacing,
     Buffer.from([0x1b, 0x61, 0x01]), // center align barcode
     Buffer.from([0x1d, 0x48, 0x02]), // HRI below barcode
     Buffer.from([0x1d, 0x77, 0x02]), // barcode width
