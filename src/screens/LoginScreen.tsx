@@ -65,24 +65,30 @@ export const LoginScreen = () => {
       <Text variant="bodyMedium" style={styles.subtitle}>Acceso de personal</Text>
 
       <SectionCard title="Selecciona empleado" style={styles.section}>
-        <View style={styles.usersWrap}>
-          {users.map((user) => (
-            <Button
-              key={user.id}
-              mode={selectedUserId === user.id ? "contained" : "outlined"}
-              onPress={() => {
-                if (selectedUserId !== user.id) {
-                  setPin("");
-                }
-                setSelectedUserId(user.id);
-              }}
-              style={styles.userButton}
-              contentStyle={styles.userButtonContent}
-            >
-              {user.name}
-            </Button>
-          ))}
-        </View>
+        {users.length > 0 ? (
+          <View style={styles.usersWrap}>
+            {users.map((user) => (
+              <Button
+                key={user.id}
+                mode={selectedUserId === user.id ? "contained" : "outlined"}
+                onPress={() => {
+                  if (selectedUserId !== user.id) {
+                    setPin("");
+                  }
+                  setSelectedUserId(user.id);
+                }}
+                style={styles.userButton}
+                contentStyle={styles.userButtonContent}
+              >
+                {user.name}
+              </Button>
+            ))}
+          </View>
+        ) : (
+          <Text variant="bodyMedium" style={styles.emptyUsersText}>
+            No hay empleados disponibles. Verifica conexión o sincronización.
+          </Text>
+        )}
       </SectionCard>
 
       {selectedUser ? (
@@ -95,11 +101,7 @@ export const LoginScreen = () => {
             disableConfirm={pin.length !== 4}
           />
         </>
-      ) : (
-        <SectionCard title="Paso 2: PIN" style={styles.section}>
-          <Text variant="bodyMedium">Selecciona un empleado para ingresar el PIN.</Text>
-        </SectionCard>
-      )}
+      ) : null}
     </ScreenContainer>
   );
 };
@@ -137,6 +139,9 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   selected: {
+    color: "#667085",
+  },
+  emptyUsersText: {
     color: "#667085",
   },
 });

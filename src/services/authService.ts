@@ -37,6 +37,18 @@ type RemoteUser = {
   pin?: unknown;
 };
 
+const extractUsersPayload = (data: unknown): RemoteUser[] => {
+  if (Array.isArray(data)) return data as RemoteUser[];
+
+  if (data && typeof data === "object") {
+    const wrapped = data as { users?: unknown; data?: unknown };
+    if (Array.isArray(wrapped.users)) return wrapped.users as RemoteUser[];
+    if (Array.isArray(wrapped.data)) return wrapped.data as RemoteUser[];
+  }
+
+  return [];
+};
+
 const getRemotePinHash = (user: RemoteUser) => {
   if (typeof user.pinHash === "string" && user.pinHash.trim().length > 0) {
     return user.pinHash.trim();
@@ -54,7 +66,10 @@ export const syncUsersFromApi = async (): Promise<number> => {
   const response = await axios.get<unknown>(`${API_BASE_URL}/api/users?includePinHash=1`, {
     headers: { Accept: "application/json" },
   });
-  const payload = Array.isArray(response.data) ? response.data : [];
+  const payload = extractUsersPayload(response.data);
+  if (payload.length === 0) {
+    throw new Error("Users payload is empty or invalid");
+  }
   const db = await getDb();
   let synced = 0;
   const remoteUserIds: string[] = [];
