@@ -1,11 +1,20 @@
 import { PropsWithChildren } from "react";
-import { ScrollView, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleProp,
+  StyleSheet,
+  View,
+  ViewStyle,
+} from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { appSpacing } from "../theme/theme";
 
 type Props = PropsWithChildren<{
   scroll?: boolean;
+  keyboardAvoiding?: boolean;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
 }>;
@@ -13,27 +22,44 @@ type Props = PropsWithChildren<{
 export const ScreenContainer = ({
   children,
   scroll = false,
+  keyboardAvoiding = false,
   style,
   contentContainerStyle,
 }: Props) => {
+  const insets = useSafeAreaInsets();
+  const contentBaseStyle = [
+    styles.content,
+    {
+      paddingBottom:
+        appSpacing.md + insets.bottom + (Platform.OS === "android" ? appSpacing.lg : 0),
+    },
+  ];
+
   const body = scroll ? (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[styles.content, contentContainerStyle]}
+      contentContainerStyle={[contentBaseStyle, contentContainerStyle]}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
     >
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.content, styles.flex, contentContainerStyle]}>{children}</View>
+    <View style={[contentBaseStyle, styles.flex, contentContainerStyle]}>{children}</View>
   );
 
   return (
     <SafeAreaView style={[styles.safeArea, style]} edges={["top", "left", "right", "bottom"]}>
-      <Animated.View entering={FadeInDown.duration(220)} style={styles.flex}>
-        {body}
-      </Animated.View>
+      <KeyboardAvoidingView
+        enabled={keyboardAvoiding}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.flex}
+      >
+        <Animated.View entering={FadeInDown.duration(220)} style={styles.flex}>
+          {body}
+        </Animated.View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

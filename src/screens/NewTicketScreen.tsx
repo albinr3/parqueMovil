@@ -124,7 +124,7 @@ export const NewTicketScreen = ({ navigation }: Props) => {
         subtitle={`Tarifa actual: $${parkingConfig.normalRate} (ticket perdido +$${parkingConfig.lostTicketRate})`}
       >
         <TextInput
-          label="Placa *"
+          label="Placa o referencia *"
           value={plate}
           onChangeText={(value) => setPlate(value.toUpperCase())}
           mode="outlined"

@@ -288,7 +288,7 @@ export const ExitScreen = () => {
   const isLostSectionDisabled = ticket !== null && ticketSearchOrigin === "number";
 
   return (
-    <ScreenContainer scroll contentContainerStyle={styles.container}>
+    <ScreenContainer scroll keyboardAvoiding contentContainerStyle={styles.container}>
       <SectionCard
         title="Buscar ticket activo"
         subtitle="Ingresa o escanea el ticket para registrar salida"
@@ -356,7 +356,7 @@ export const ExitScreen = () => {
         >
           <TextInput
             mode="outlined"
-            label="Placa"
+            label="Placa o referencia"
             value={plateForLost}
             onChangeText={(value) => setPlateForLost(value.toUpperCase())}
             disabled={isLostSectionDisabled}

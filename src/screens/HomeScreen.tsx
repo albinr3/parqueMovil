@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Alert, Platform, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Text } from "react-native-paper";
@@ -35,6 +35,29 @@ export const HomeScreen = ({ navigation }: Props) => {
       ]).catch(() => undefined);
     }, [loadToday, user?.id])
   );
+
+  const onLogoutPress = async () => {
+    const shiftClosed = await hasShiftClosureToday().catch(() => true);
+    if (shiftClosed) {
+      await logout();
+      return;
+    }
+
+    Alert.alert(
+      "Cierre pendiente",
+      "Aún no has cerrado caja hoy. Si sales ahora, recuerda hacer el cierre luego.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Salir de todos modos",
+          style: "destructive",
+          onPress: () => {
+            void logout();
+          },
+        },
+      ]
+    );
+  };
 
   const totalRecaudado = tickets.reduce((sum, t) => sum + (t.amountCharged ?? 0), 0);
   const bottomSafePadding =
@@ -90,7 +113,12 @@ export const HomeScreen = ({ navigation }: Props) => {
       <View style={styles.footerActions}>
         <SecondaryAction icon="history" label="Historial" style={styles.secondaryItem} onPress={() => navigation.navigate("History")} />
         <SecondaryAction icon="cog-outline" label="Ajustes" style={styles.secondaryItem} onPress={() => navigation.navigate("Settings")} />
-        <SecondaryAction icon="logout" label="Salir" style={styles.secondaryItem} onPress={() => void logout()} />
+        <SecondaryAction
+          icon="logout"
+          label="Salir"
+          style={styles.secondaryItem}
+          onPress={() => void onLogoutPress()}
+        />
       </View>
     </ScreenContainer>
   );

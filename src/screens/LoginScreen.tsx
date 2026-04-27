@@ -20,6 +20,7 @@ export const LoginScreen = () => {
     () => users.find((u) => u.id === selectedUserId)?.name ?? "Selecciona empleado",
     [selectedUserId, users]
   );
+  const selectedUser = users.find((u) => u.id === selectedUserId) ?? null;
 
   const onKeyPress = async (key: string) => {
     if (submitting) return;
@@ -47,6 +48,7 @@ export const LoginScreen = () => {
       if (ok) {
         setPin("");
       } else {
+        setPin("");
         showMessage({ text: "PIN inválido, verifica e intenta de nuevo", type: "error" });
       }
       return;
@@ -68,7 +70,12 @@ export const LoginScreen = () => {
             <Button
               key={user.id}
               mode={selectedUserId === user.id ? "contained" : "outlined"}
-              onPress={() => setSelectedUserId(user.id)}
+              onPress={() => {
+                if (selectedUserId !== user.id) {
+                  setPin("");
+                }
+                setSelectedUserId(user.id);
+              }}
               style={styles.userButton}
               contentStyle={styles.userButtonContent}
             >
@@ -78,14 +85,21 @@ export const LoginScreen = () => {
         </View>
       </SectionCard>
 
-      <Text style={styles.selected}>{selectedName}</Text>
-      <Text variant="headlineMedium">{`${"●".repeat(pin.length)}${"○".repeat(4 - pin.length)}`}</Text>
-
-      <NumPad
-        onKeyPress={onKeyPress}
-        disabled={submitting}
-        disableConfirm={!selectedUserId || pin.length !== 4}
-      />
+      {selectedUser ? (
+        <>
+          <Text style={styles.selected}>{selectedName}</Text>
+          <Text variant="headlineMedium">{`${"●".repeat(pin.length)}${"○".repeat(4 - pin.length)}`}</Text>
+          <NumPad
+            onKeyPress={onKeyPress}
+            disabled={submitting}
+            disableConfirm={pin.length !== 4}
+          />
+        </>
+      ) : (
+        <SectionCard title="Paso 2: PIN" style={styles.section}>
+          <Text variant="bodyMedium">Selecciona un empleado para ingresar el PIN.</Text>
+        </SectionCard>
+      )}
     </ScreenContainer>
   );
 };

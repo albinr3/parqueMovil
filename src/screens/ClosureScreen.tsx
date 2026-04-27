@@ -80,7 +80,7 @@ export const ClosureScreen = () => {
   };
 
   return (
-    <ScreenContainer scroll contentContainerStyle={styles.container}>
+    <ScreenContainer scroll keyboardAvoiding contentContainerStyle={styles.container}>
       <Text variant="headlineSmall">Resumen del turno</Text>
 
       <SectionCard title="Totales">
