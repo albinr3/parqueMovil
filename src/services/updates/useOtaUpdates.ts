@@ -12,10 +12,28 @@ interface OtaUpdateState {
 
 interface CheckForUpdatesOptions {
   silentIfOffline?: boolean;
+  silentIfError?: boolean;
 }
 
 const DEFAULT_ERROR_MESSAGE = "No se pudo completar la actualizacion. Intenta de nuevo.";
 const OFFLINE_ERROR_MESSAGE = "No hay conexion a internet para buscar actualizaciones.";
+
+const toFriendlyUpdateError = (error: unknown) => {
+  const rawMessage = String((error as any)?.message || "");
+  const normalized = rawMessage.toLowerCase();
+
+  if (
+    normalized.includes("network") ||
+    normalized.includes("internet") ||
+    normalized.includes("timed out") ||
+    normalized.includes("timeout") ||
+    normalized.includes("failed to check for update")
+  ) {
+    return "No se pudo verificar actualizaciones en este momento.";
+  }
+
+  return DEFAULT_ERROR_MESSAGE;
+};
 
 export function useOtaUpdates() {
   const [state, setState] = useState<OtaUpdateState>({
@@ -68,9 +86,17 @@ export function useOtaUpdates() {
         }
 
         setState({ status: "available", visible: true, errorMessage: null });
-      } catch (error: any) {
-        const message = String(error?.message || DEFAULT_ERROR_MESSAGE);
-        setState({ status: "error", visible: true, errorMessage: message });
+      } catch (error: unknown) {
+        if (options?.silentIfError) {
+          setState({ status: "idle", visible: false, errorMessage: null });
+          return;
+        }
+
+        setState({
+          status: "error",
+          visible: true,
+          errorMessage: toFriendlyUpdateError(error),
+        });
       } finally {
         runningCheckRef.current = false;
       }
@@ -98,9 +124,12 @@ export function useOtaUpdates() {
       }
 
       setState({ status: "idle", visible: false, errorMessage: null });
-    } catch (error: any) {
-      const message = String(error?.message || DEFAULT_ERROR_MESSAGE);
-      setState({ status: "error", visible: true, errorMessage: message });
+    } catch (error: unknown) {
+      setState({
+        status: "error",
+        visible: true,
+        errorMessage: toFriendlyUpdateError(error),
+      });
     } finally {
       runningDownloadRef.current = false;
     }
@@ -111,9 +140,12 @@ export function useOtaUpdates() {
 
     try {
       await Updates.reloadAsync();
-    } catch (error: any) {
-      const message = String(error?.message || DEFAULT_ERROR_MESSAGE);
-      setState({ status: "error", visible: true, errorMessage: message });
+    } catch (error: unknown) {
+      setState({
+        status: "error",
+        visible: true,
+        errorMessage: toFriendlyUpdateError(error),
+      });
     }
   }, [supported]);
 

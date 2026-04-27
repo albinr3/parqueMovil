@@ -59,7 +59,7 @@ export default function App() {
   const otaUpdates = useOtaUpdates();
 
   useEffect(() => {
-    void otaUpdates.checkForUpdates({ silentIfOffline: true });
+    void otaUpdates.checkForUpdates({ silentIfOffline: true, silentIfError: true });
   }, [otaUpdates.checkForUpdates]);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function App() {
 
     const appStateSub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        void otaUpdates.checkForUpdates({ silentIfOffline: true });
+        void otaUpdates.checkForUpdates({ silentIfOffline: true, silentIfError: true });
       }
       if (state !== "active") return;
       const scheduledLogoutAt = scheduledLogoutAtRef.current;
