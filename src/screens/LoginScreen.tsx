@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { Button, Text } from "react-native-paper";
 import { useAuthStore } from "../stores/authStore";
@@ -10,10 +10,13 @@ import { useFeedback } from "../contexts/FeedbackContext";
 
 export const LoginScreen = () => {
   const users = useAuthStore((state) => state.users);
+  const authLoading = useAuthStore((state) => state.loading);
+  const refreshUsers = useAuthStore((state) => state.refreshUsers);
   const login = useAuthStore((state) => state.login);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [triedReloadUsers, setTriedReloadUsers] = useState(false);
   const { showMessage } = useFeedback();
 
   const selectedName = useMemo(
@@ -21,6 +24,13 @@ export const LoginScreen = () => {
     [selectedUserId, users]
   );
   const selectedUser = users.find((u) => u.id === selectedUserId) ?? null;
+
+  useEffect(() => {
+    if (authLoading || users.length > 0 || triedReloadUsers) return;
+
+    setTriedReloadUsers(true);
+    void refreshUsers();
+  }, [authLoading, refreshUsers, triedReloadUsers, users.length]);
 
   const onKeyPress = async (key: string) => {
     if (submitting) return;

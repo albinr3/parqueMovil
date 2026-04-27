@@ -7,6 +7,21 @@ import { API_BASE_URL } from "../config/constants";
 
 const SESSION_KEY = "pmb_session_user";
 
+const getCandidateBaseUrls = (baseUrl: string) => {
+  const normalized = baseUrl.replace(/\/+$/, "");
+
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname;
+    const altHost = host.startsWith("www.") ? host.slice(4) : `www.${host}`;
+    const origin = `${parsed.protocol}//${host}${parsed.port ? `:${parsed.port}` : ""}`;
+    const altOrigin = `${parsed.protocol}//${altHost}${parsed.port ? `:${parsed.port}` : ""}`;
+    return Array.from(new Set([origin, altOrigin]));
+  } catch {
+    return [normalized];
+  }
+};
+
 export const hashPin = (pin: string) => {
   let hash = 0;
 
@@ -30,42 +45,115 @@ export const listActiveUsers = async (): Promise<User[]> => {
 type RemoteUser = {
   id?: unknown;
   name?: unknown;
+  username?: unknown;
   role?: unknown;
   active?: unknown;
   pinHash?: unknown;
   pin_hash?: unknown;
   pin?: unknown;
+  pinCode?: unknown;
+  pin_code?: unknown;
+  password?: unknown;
+  data?: unknown;
 };
 
 const extractUsersPayload = (data: unknown): RemoteUser[] => {
   if (Array.isArray(data)) return data as RemoteUser[];
 
   if (data && typeof data === "object") {
-    const wrapped = data as { users?: unknown; data?: unknown };
+    const wrapped = data as { users?: unknown; data?: unknown; results?: unknown; items?: unknown };
     if (Array.isArray(wrapped.users)) return wrapped.users as RemoteUser[];
     if (Array.isArray(wrapped.data)) return wrapped.data as RemoteUser[];
+    if (Array.isArray(wrapped.results)) return wrapped.results as RemoteUser[];
+    if (Array.isArray(wrapped.items)) return wrapped.items as RemoteUser[];
+
+    if (wrapped.data && typeof wrapped.data === "object") {
+      const nested = wrapped.data as { users?: unknown; items?: unknown; results?: unknown };
+      if (Array.isArray(nested.users)) return nested.users as RemoteUser[];
+      if (Array.isArray(nested.items)) return nested.items as RemoteUser[];
+      if (Array.isArray(nested.results)) return nested.results as RemoteUser[];
+    }
   }
 
   return [];
 };
 
+const normalizeId = (value: unknown) => {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+};
+
+const normalizeName = (user: RemoteUser) => {
+  if (typeof user.name === "string" && user.name.trim().length > 0) {
+    return user.name.trim();
+  }
+  if (typeof user.username === "string" && user.username.trim().length > 0) {
+    return user.username.trim();
+  }
+  return "";
+};
+
 const getRemotePinHash = (user: RemoteUser) => {
-  if (typeof user.pinHash === "string" && user.pinHash.trim().length > 0) {
-    return user.pinHash.trim();
+  const rawPinCandidate =
+    user.pinHash ??
+    user.pin_hash ??
+    user.pin ??
+    user.pinCode ??
+    user.pin_code ??
+    user.password ??
+    (user.data && typeof user.data === "object" ? (user.data as any).pin : undefined);
+
+  if (rawPinCandidate == null) {
+    return null;
   }
-  if (typeof user.pin_hash === "string" && user.pin_hash.trim().length > 0) {
-    return user.pin_hash.trim();
+
+  const normalized =
+    typeof rawPinCandidate === "string"
+      ? rawPinCandidate.trim()
+      : typeof rawPinCandidate === "number" && Number.isFinite(rawPinCandidate)
+      ? String(rawPinCandidate)
+      : "";
+
+  if (!normalized) {
+    return null;
   }
-  if (typeof user.pin === "string" && user.pin.trim().length > 0) {
-    return user.pin.trim();
+
+  const isBcryptHash =
+    normalized.startsWith("$2a$") ||
+    normalized.startsWith("$2b$") ||
+    normalized.startsWith("$2y$");
+
+  if (isBcryptHash) {
+    return normalized;
   }
-  return null;
+
+  return hashPin(normalized);
 };
 
 export const syncUsersFromApi = async (): Promise<number> => {
-  const response = await axios.get<unknown>(`${API_BASE_URL}/api/users?includePinHash=1`, {
-    headers: { Accept: "application/json" },
-  });
+  const baseUrls = getCandidateBaseUrls(API_BASE_URL);
+  const candidateUrls = baseUrls.flatMap((baseUrl) => [
+    `${baseUrl}/api/users?includePinHash=1`,
+    `${baseUrl}/api/users`,
+  ]);
+
+  let response: Awaited<ReturnType<typeof axios.get<unknown>>> | null = null;
+  let lastError: unknown = null;
+
+  for (const url of candidateUrls) {
+    try {
+      response = await axios.get<unknown>(url, {
+        headers: { Accept: "application/json" },
+      });
+      break;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+
+  if (!response) throw lastError ?? new Error("Could not fetch users from API");
+
   const payload = extractUsersPayload(response.data);
   if (payload.length === 0) {
     throw new Error("Users payload is empty or invalid");
@@ -80,10 +168,12 @@ export const syncUsersFromApi = async (): Promise<number> => {
 
     for (const rawUser of payload) {
       const user = rawUser as RemoteUser;
-      const id = typeof user.id === "string" ? user.id.trim() : "";
-      const name = typeof user.name === "string" ? user.name.trim() : "";
+      const id = normalizeId(user.id);
+      const name = normalizeName(user);
 
-      if (!id || !name) continue;
+      if (!id || !name) {
+        continue;
+      }
       remoteUserIds.push(id);
 
       const role = user.role === "ADMIN" ? "ADMIN" : "EMPLOYEE";
@@ -109,7 +199,9 @@ export const syncUsersFromApi = async (): Promise<number> => {
         "SELECT id FROM users WHERE id = ?",
         [id]
       );
-      if (!existing) continue;
+      if (!existing) {
+        continue;
+      }
 
       await db.runAsync(
         `UPDATE users

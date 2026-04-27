@@ -14,6 +14,7 @@ type AuthState = {
   users: User[];
   loading: boolean;
   init: () => Promise<void>;
+  refreshUsers: () => Promise<void>;
   login: (userId: string, pin: string) => Promise<boolean>;
   logout: () => Promise<void>;
 };
@@ -35,6 +36,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     set({ user: sessionUser, users: activeUsers, loading: false });
+  },
+  refreshUsers: async () => {
+    await syncUsersFromApi().catch(() => {
+      // Si la API falla, conservamos lista local.
+    });
+    const activeUsers = await listActiveUsers();
+    set({ users: activeUsers });
   },
   login: async (userId, pin) => {
     const user = await validateUserPin(userId, pin);

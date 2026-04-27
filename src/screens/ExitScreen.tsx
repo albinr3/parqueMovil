@@ -38,6 +38,7 @@ export const ExitScreen = () => {
   const [processingType, setProcessingType] = useState<"normal" | "lost" | null>(
     null
   );
+  const [isLostInputFocused, setIsLostInputFocused] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const scanLockRef = useRef(false);
@@ -359,6 +360,8 @@ export const ExitScreen = () => {
             label="Placa o referencia"
             value={plateForLost}
             onChangeText={(value) => setPlateForLost(value.toUpperCase())}
+            onFocus={() => setIsLostInputFocused(true)}
+            onBlur={() => setIsLostInputFocused(false)}
             disabled={isLostSectionDisabled}
             autoCapitalize="characters"
             maxLength={10}
@@ -375,6 +378,8 @@ export const ExitScreen = () => {
           />
         </SectionCard>
       </View>
+
+      {isLostInputFocused ? <View style={styles.keyboardSpacer} /> : null}
 
       <Modal
         visible={scannerVisible}
@@ -456,5 +461,8 @@ const styles = StyleSheet.create({
   },
   lostSectionDisabled: {
     opacity: 0.6,
+  },
+  keyboardSpacer: {
+    height: 220,
   },
 });
