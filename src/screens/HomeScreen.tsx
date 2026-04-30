@@ -31,13 +31,13 @@ export const HomeScreen = ({ navigation }: Props) => {
     useCallback(() => {
       Promise.all([
         loadToday(user?.id),
-        hasShiftClosureToday().then(setIsShiftClosedToday),
+        hasShiftClosureToday(user?.id).then(setIsShiftClosedToday),
       ]).catch(() => undefined);
     }, [loadToday, user?.id])
   );
 
   const onLogoutPress = async () => {
-    const shiftClosed = await hasShiftClosureToday().catch(() => true);
+    const shiftClosed = await hasShiftClosureToday(user?.id).catch(() => true);
     if (shiftClosed) {
       await logout();
       return;

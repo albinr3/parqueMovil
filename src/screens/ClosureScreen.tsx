@@ -36,9 +36,9 @@ export const ClosureScreen = () => {
     useCallback(() => {
       Promise.all([
         getShiftSummary().then(setSummary),
-        hasShiftClosureToday().then(setAlreadyClosedToday),
+        hasShiftClosureToday(user?.id).then(setAlreadyClosedToday),
       ]).catch(() => undefined);
-    }, [])
+    }, [user?.id])
   );
 
   const refreshSummary = async () => {

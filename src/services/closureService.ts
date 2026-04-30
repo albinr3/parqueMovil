@@ -59,13 +59,22 @@ export const getShiftSummary = async () => {
   };
 };
 
-export const hasShiftClosureToday = async () => {
+export const hasShiftClosureToday = async (userId?: string) => {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COUNT(*) as total
-     FROM shift_closures
-     WHERE date(datetime(end_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
-  );
+  const normalizedUserId = userId?.trim();
+  const row = normalizedUserId
+    ? await db.getFirstAsync<{ total: number }>(
+      `SELECT COUNT(*) as total
+       FROM shift_closures
+       WHERE date(datetime(end_time, '-4 hours')) = date(datetime('now', '-4 hours'))
+         AND user_id = ?`,
+      [normalizedUserId]
+    )
+    : await db.getFirstAsync<{ total: number }>(
+      `SELECT COUNT(*) as total
+       FROM shift_closures
+       WHERE date(datetime(end_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
+    );
 
   return (row?.total ?? 0) > 0;
 };

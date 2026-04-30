@@ -87,7 +87,9 @@ export const createTicket = async (
   const closureToday = await db.getFirstAsync<{ total: number }>(
     `SELECT COUNT(*) as total
      FROM shift_closures
-     WHERE date(datetime(end_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
+     WHERE date(datetime(end_time, '-4 hours')) = date(datetime('now', '-4 hours'))
+       AND user_id = ?`,
+    [userId]
   );
   if ((closureToday?.total ?? 0) > 0) {
     throw new ShiftClosedForTodayError();
