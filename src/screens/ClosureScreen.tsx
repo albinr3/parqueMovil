@@ -17,6 +17,7 @@ import { formatCurrency } from "../utils/format";
 
 export const ClosureScreen = () => {
   const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState({
@@ -72,6 +73,7 @@ export const ClosureScreen = () => {
       await refreshSummary();
       setAlreadyClosedToday(true);
       showMessage({ text: "Cierre guardado correctamente", type: "success" });
+      await logout();
     } catch {
       showMessage({ text: "No se pudo guardar el cierre", type: "error" });
     } finally {

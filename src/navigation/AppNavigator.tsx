@@ -35,6 +35,17 @@ const HomeHeaderTitle = () => (
   </View>
 );
 
+const LoggedUserHeader = ({ name }: { name: string }) => (
+  <View style={styles.userHeaderWrap}>
+    <Text variant="labelSmall" style={styles.userHeaderLabel}>
+      Usuario
+    </Text>
+    <Text variant="labelMedium" numberOfLines={1} style={styles.userHeaderName}>
+      {name}
+    </Text>
+  </View>
+);
+
 export const AppNavigator = () => {
   const user = useAuthStore((state) => state.user);
 
@@ -50,6 +61,8 @@ export const AppNavigator = () => {
           headerTitleStyle: {
             fontWeight: "700",
           },
+          headerRight: () =>
+            user ? <LoggedUserHeader name={user.name} /> : null,
           contentStyle: {
             backgroundColor: appTheme.colors.background,
           },
@@ -92,5 +105,17 @@ const styles = StyleSheet.create({
   },
   homeTitleText: {
     fontWeight: "700",
+  },
+  userHeaderWrap: {
+    alignItems: "flex-end",
+    maxWidth: 170,
+  },
+  userHeaderLabel: {
+    opacity: 0.65,
+    lineHeight: 14,
+  },
+  userHeaderName: {
+    fontWeight: "700",
+    lineHeight: 16,
   },
 });
