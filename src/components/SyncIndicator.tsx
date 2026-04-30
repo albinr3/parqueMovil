@@ -9,6 +9,7 @@ import { useFeedback } from "../contexts/FeedbackContext";
 export const SyncIndicator = () => {
   const forceSync = useSyncStore((state) => state.forceSync);
   const lastSyncAt = useSyncStore((state) => state.lastSyncAt);
+  const lastSyncError = useSyncStore((state) => state.lastSyncError);
   const { showMessage } = useFeedback();
   const [syncing, setSyncing] = useState(false);
 
@@ -19,8 +20,12 @@ export const SyncIndicator = () => {
       setSyncing(true);
       await forceSync();
       showMessage({ text: "Sincronización solicitada", type: "info" });
-    } catch {
-      showMessage({ text: "No se pudo sincronizar en este momento", type: "error" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : null;
+      showMessage({
+        text: message || "No se pudo sincronizar en este momento",
+        type: "error",
+      });
     } finally {
       setSyncing(false);
     }
@@ -32,7 +37,13 @@ export const SyncIndicator = () => {
       <Button mode="text" compact loading={syncing} disabled={syncing} onPress={onSyncPress}>
         Sync
       </Button>
-      <Text variant="bodySmall">{lastSyncAt ? `Ult: ${formatTimeOnly(lastSyncAt)}` : "Sin sincronizar"}</Text>
+      <Text variant="bodySmall">
+        {lastSyncError
+          ? "Sync con error"
+          : lastSyncAt
+            ? `Ult: ${formatTimeOnly(lastSyncAt)}`
+            : "Sin sincronizar"}
+      </Text>
     </View>
   );
 };
