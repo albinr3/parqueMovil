@@ -155,23 +155,6 @@ export const ExitScreen = () => {
     }, 800);
   };
 
-  const confirmNormalExit = (selected: Ticket) => {
-    Alert.alert(
-      "Confirmar salida",
-      `Registrar salida para ticket #${selected.ticketNumber
-        .toString()
-        .padStart(4, "0")}.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Confirmar",
-          style: "default",
-          onPress: () => void onRegisterNormal(selected.id),
-        },
-      ]
-    );
-  };
-
   const onRegisterNormal = async (ticketId: string) => {
     if (processingType) return;
 
@@ -346,7 +329,7 @@ export const ExitScreen = () => {
         label="Registrar salida"
         loading={processingType === "normal"}
         disabled={!ticket || searching || processingType !== null}
-        onPress={() => ticket && confirmNormalExit(ticket)}
+        onPress={() => ticket && void onRegisterNormal(ticket.id)}
       />
 
       <View style={styles.lostSectionWrap}>
@@ -364,7 +347,7 @@ export const ExitScreen = () => {
             onBlur={() => setIsLostInputFocused(false)}
             disabled={isLostSectionDisabled}
             autoCapitalize="characters"
-            maxLength={10}
+            maxLength={40}
             placeholder="Ej: AB-1234"
           />
           <SecondaryAction

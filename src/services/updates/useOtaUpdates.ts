@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Updates from "expo-updates";
 
 type OtaUpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "error";
@@ -17,6 +19,29 @@ interface CheckForUpdatesOptions {
 
 const DEFAULT_ERROR_MESSAGE = "No se pudo completar la actualizacion. Intenta de nuevo.";
 const OFFLINE_ERROR_MESSAGE = "No hay conexion a internet para buscar actualizaciones.";
+const OTA_IGNORED_COUNT_KEY = "ota_update_ignored_count";
+const OTA_AUTO_UPDATE_THRESHOLD = 5;
+const OTA_IGNORE_TIMEOUT_MS = 45000;
+
+const getIgnoredCount = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(OTA_IGNORED_COUNT_KEY);
+    const parsed = Number(raw ?? "0");
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.trunc(parsed);
+  } catch {
+    return 0;
+  }
+};
+
+const setIgnoredCount = async (value: number) => {
+  const safeValue = Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  try {
+    await AsyncStorage.setItem(OTA_IGNORED_COUNT_KEY, String(safeValue));
+  } catch {
+    // Si falla persistencia no debe romper el flujo de actualizacion.
+  }
+};
 
 const toFriendlyUpdateError = (error: unknown) => {
   const rawMessage = String((error as any)?.message || "");
@@ -43,12 +68,19 @@ export function useOtaUpdates() {
   });
   const runningCheckRef = useRef(false);
   const runningDownloadRef = useRef(false);
+  const statusRef = useRef<OtaUpdateStatus>("idle");
+  const visibleRef = useRef(false);
+  const ignoreRecordedForCurrentAvailableRef = useRef(false);
+
+  useEffect(() => {
+    statusRef.current = state.status;
+  }, [state.status]);
+
+  useEffect(() => {
+    visibleRef.current = state.visible;
+  }, [state.visible]);
 
   const supported = useMemo(() => !__DEV__ && Updates.isEnabled, []);
-
-  const dismiss = useCallback(() => {
-    setState((prev) => ({ ...prev, visible: false }));
-  }, []);
 
   const hasInternetConnection = useCallback(async () => {
     try {
@@ -60,6 +92,78 @@ export function useOtaUpdates() {
       return false;
     }
   }, []);
+
+  const downloadUpdate = useCallback(async () => {
+    if (!supported || runningDownloadRef.current) return;
+
+    const hasInternet = await hasInternetConnection();
+    if (!hasInternet) {
+      setState({ status: "error", visible: true, errorMessage: OFFLINE_ERROR_MESSAGE });
+      return;
+    }
+
+    runningDownloadRef.current = true;
+    setState((prev) => ({ ...prev, status: "downloading", visible: true, errorMessage: null }));
+
+    try {
+      const result = await Updates.fetchUpdateAsync();
+      if (result.isNew) {
+        await setIgnoredCount(0);
+        setState({ status: "ready", visible: true, errorMessage: null });
+        return;
+      }
+
+      await setIgnoredCount(0);
+      setState({ status: "idle", visible: false, errorMessage: null });
+    } catch (error: unknown) {
+      setState({
+        status: "error",
+        visible: true,
+        errorMessage: toFriendlyUpdateError(error),
+      });
+    } finally {
+      runningDownloadRef.current = false;
+    }
+  }, [hasInternetConnection, supported]);
+
+  const dismiss = useCallback(() => {
+    if (statusRef.current !== "available") {
+      setState((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    void (async () => {
+      if (ignoreRecordedForCurrentAvailableRef.current) {
+        setState((prev) => ({ ...prev, visible: false }));
+        return;
+      }
+      ignoreRecordedForCurrentAvailableRef.current = true;
+      const ignoredCount = await getIgnoredCount();
+      const nextIgnoredCount = ignoredCount + 1;
+      await setIgnoredCount(nextIgnoredCount);
+
+      if (nextIgnoredCount > OTA_AUTO_UPDATE_THRESHOLD) {
+        await downloadUpdate();
+        return;
+      }
+
+      setState((prev) => ({ ...prev, visible: false }));
+    })();
+  }, [downloadUpdate]);
+
+  const registerIgnoreIfAvailable = useCallback(async () => {
+    if (statusRef.current !== "available" || !visibleRef.current) return;
+    if (ignoreRecordedForCurrentAvailableRef.current) return;
+
+    ignoreRecordedForCurrentAvailableRef.current = true;
+    const ignoredCount = await getIgnoredCount();
+    const nextIgnoredCount = ignoredCount + 1;
+    await setIgnoredCount(nextIgnoredCount);
+
+    if (nextIgnoredCount > OTA_AUTO_UPDATE_THRESHOLD) {
+      await downloadUpdate();
+    }
+  }, [downloadUpdate]);
 
   const checkForUpdates = useCallback(
     async (options?: CheckForUpdatesOptions) => {
@@ -81,10 +185,18 @@ export function useOtaUpdates() {
       try {
         const result = await Updates.checkForUpdateAsync();
         if (!result.isAvailable) {
+          await setIgnoredCount(0);
           setState({ status: "idle", visible: false, errorMessage: null });
           return;
         }
 
+        const ignoredCount = await getIgnoredCount();
+        if (ignoredCount > OTA_AUTO_UPDATE_THRESHOLD) {
+          await downloadUpdate();
+          return;
+        }
+
+        ignoreRecordedForCurrentAvailableRef.current = false;
         setState({ status: "available", visible: true, errorMessage: null });
       } catch (error: unknown) {
         if (options?.silentIfError) {
@@ -101,39 +213,8 @@ export function useOtaUpdates() {
         runningCheckRef.current = false;
       }
     },
-    [hasInternetConnection, supported]
+    [downloadUpdate, hasInternetConnection, supported]
   );
-
-  const downloadUpdate = useCallback(async () => {
-    if (!supported || runningDownloadRef.current) return;
-
-    const hasInternet = await hasInternetConnection();
-    if (!hasInternet) {
-      setState({ status: "error", visible: true, errorMessage: OFFLINE_ERROR_MESSAGE });
-      return;
-    }
-
-    runningDownloadRef.current = true;
-    setState((prev) => ({ ...prev, status: "downloading", visible: true, errorMessage: null }));
-
-    try {
-      const result = await Updates.fetchUpdateAsync();
-      if (result.isNew) {
-        setState({ status: "ready", visible: true, errorMessage: null });
-        return;
-      }
-
-      setState({ status: "idle", visible: false, errorMessage: null });
-    } catch (error: unknown) {
-      setState({
-        status: "error",
-        visible: true,
-        errorMessage: toFriendlyUpdateError(error),
-      });
-    } finally {
-      runningDownloadRef.current = false;
-    }
-  }, [hasInternetConnection, supported]);
 
   const reloadApp = useCallback(async () => {
     if (!supported) return;
@@ -148,6 +229,22 @@ export function useOtaUpdates() {
       });
     }
   }, [supported]);
+
+  useEffect(() => {
+    if (state.status !== "available" || !state.visible) return;
+    const timeout = setTimeout(() => {
+      void registerIgnoreIfAvailable();
+    }, OTA_IGNORE_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [registerIgnoreIfAvailable, state.status, state.visible]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") return;
+      void registerIgnoreIfAvailable();
+    });
+    return () => sub.remove();
+  }, [registerIgnoreIfAvailable]);
 
   return {
     status: state.status,

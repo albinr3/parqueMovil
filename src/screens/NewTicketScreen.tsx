@@ -11,13 +11,12 @@ import { buildTicketPrintText, getTicketBarcodeValue } from "../utils/ticketPrin
 import { printTextWithBarcode } from "../services/printerService";
 import { PrimaryAction } from "../components/PrimaryAction";
 import { ScreenContainer } from "../components/ScreenContainer";
-import { SecondaryAction } from "../components/SecondaryAction";
 import { SectionCard } from "../components/SectionCard";
 import { appSpacing } from "../theme/theme";
 import { useFeedback } from "../contexts/FeedbackContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "NewTicket">;
-const PLATE_REGEX = /^[A-Z0-9-]{4,10}$/;
+const PLATE_REGEX = /^[A-Z0-9-]{4,40}$/;
 
 export const NewTicketScreen = ({ navigation }: Props) => {
   const user = useAuthStore((state) => state.user);
@@ -25,7 +24,7 @@ export const NewTicketScreen = ({ navigation }: Props) => {
   const loadConfig = useConfigStore((state) => state.loadConfig);
   const addTicket = useTicketStore((state) => state.addTicket);
   const [plate, setPlate] = useState("");
-  const [loadingAction, setLoadingAction] = useState<"print" | "save" | null>(null);
+  const [loadingAction, setLoadingAction] = useState<"print" | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showMessage } = useFeedback();
 
@@ -36,7 +35,7 @@ export const NewTicketScreen = ({ navigation }: Props) => {
     };
   }, [loadConfig]);
 
-  const handleCreate = async (printAfterCreate: boolean) => {
+  const handleCreate = async () => {
     if (!user || loadingAction) return;
 
     const normalizedPlate = plate.trim().toUpperCase();
@@ -50,53 +49,46 @@ export const NewTicketScreen = ({ navigation }: Props) => {
 
     if (!PLATE_REGEX.test(normalizedPlate)) {
       showMessage({
-        text: "La placa debe tener entre 4 y 10 caracteres (A-Z, 0-9 o -)",
+        text: "La placa debe tener entre 4 y 40 caracteres (A-Z, 0-9 o -)",
         type: "warning",
       });
       return;
     }
 
     try {
-      setLoadingAction(printAfterCreate ? "print" : "save");
+      setLoadingAction("print");
       const config = await loadConfig({ forceRefresh: false });
       const ticket = await addTicket(user.id, normalizedPlate, config.normalRate);
 
-      if (printAfterCreate) {
-        const text = buildTicketPrintText({
-          parkingName: config.parkingName,
-          ticketNumber: ticket.ticketNumber,
-          plate: ticket.plate,
-          entryTime: ticket.entryTime,
-          normalRate: config.normalRate,
-          lostRate: config.lostTicketRate,
-          headerText: config.ticketHeader,
-        });
+      const text = buildTicketPrintText({
+        parkingName: config.parkingName,
+        ticketNumber: ticket.ticketNumber,
+        plate: ticket.plate,
+        entryTime: ticket.entryTime,
+        normalRate: config.normalRate,
+        lostRate: config.lostTicketRate,
+        headerText: config.ticketHeader,
+      });
 
-        const printResult = await printTextWithBarcode(
-          text,
-          getTicketBarcodeValue(ticket.ticketNumber)
-        );
-        if (printResult.ok) {
-          if (printResult.warning) {
-            showMessage({
-              text: `Ticket creado. ${printResult.warning}`,
-              type: "warning",
-              duration: 3600,
-            });
-          } else {
-            showMessage({ text: "Ticket creado, cobrado e impreso", type: "success" });
-          }
-        } else {
+      const printResult = await printTextWithBarcode(
+        text,
+        getTicketBarcodeValue(ticket.ticketNumber)
+      );
+      if (printResult.ok) {
+        if (printResult.warning) {
           showMessage({
-            text: `Ticket creado, pero falló impresión: ${printResult.error}`,
+            text: `Ticket creado. ${printResult.warning}`,
             type: "warning",
-            duration: 3400,
+            duration: 3600,
           });
+        } else {
+          showMessage({ text: "Ticket creado, cobrado e impreso", type: "success" });
         }
       } else {
         showMessage({
-          text: `Ticket creado y cobrado por $${ticket.entryAmountCharged}`,
-          type: "success",
+          text: `Ticket creado, pero falló impresión: ${printResult.error}`,
+          type: "warning",
+          duration: 3400,
         });
       }
 
@@ -129,7 +121,7 @@ export const NewTicketScreen = ({ navigation }: Props) => {
           onChangeText={(value) => setPlate(value.toUpperCase())}
           mode="outlined"
           autoCapitalize="characters"
-          maxLength={10}
+          maxLength={40}
           placeholder="Ej: AB-1234"
         />
       </SectionCard>
@@ -139,14 +131,7 @@ export const NewTicketScreen = ({ navigation }: Props) => {
         label={`Imprimir y cobrar $${parkingConfig.normalRate}`}
         loading={loadingAction === "print"}
         disabled={loadingAction !== null || !plate.trim()}
-        onPress={() => void handleCreate(true)}
-      />
-      <SecondaryAction
-        icon="content-save-outline"
-        label={`Guardar y cobrar $${parkingConfig.normalRate}`}
-        loading={loadingAction === "save"}
-        disabled={loadingAction !== null || !plate.trim()}
-        onPress={() => void handleCreate(false)}
+        onPress={() => void handleCreate()}
       />
     </ScreenContainer>
   );
