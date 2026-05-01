@@ -4,6 +4,8 @@ import { getDb } from "../database/db";
 
 const PARKING_CONFIG_META_KEY = "parking_config_cache";
 const PARKING_CONFIG_LAST_FETCH_DATE_META_KEY = "parking_config_last_fetch_date";
+const PARKING_CONFIG_LAST_FETCH_AT_META_KEY = "parking_config_last_fetch_at";
+const CONFIG_REFRESH_INTERVAL_MS = 60 * 1000;
 
 export type ParkingConfig = {
   parkingName: string;
@@ -92,6 +94,16 @@ const saveLastFetchDate = async (dateKey: string): Promise<void> => {
   );
 };
 
+const saveLastFetchAt = async (timestamp: number): Promise<void> => {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO app_meta(key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [PARKING_CONFIG_LAST_FETCH_AT_META_KEY, String(timestamp)]
+  );
+};
+
 const getLastFetchDate = async (): Promise<string | null> => {
   const db = await getDb();
   const row = await db.getFirstAsync<{ value: string }>(
@@ -99,6 +111,17 @@ const getLastFetchDate = async (): Promise<string | null> => {
     [PARKING_CONFIG_LAST_FETCH_DATE_META_KEY]
   );
   return row?.value ?? null;
+};
+
+const getLastFetchAt = async (): Promise<number | null> => {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ value: string }>(
+    "SELECT value FROM app_meta WHERE key = ?",
+    [PARKING_CONFIG_LAST_FETCH_AT_META_KEY]
+  );
+  if (!row?.value) return null;
+  const parsed = Number(row.value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
 export const getCachedParkingConfig = async (): Promise<ParkingConfig | null> => {
@@ -136,6 +159,7 @@ const fetchRemoteParkingConfig = async (): Promise<ParkingConfig> => {
     ticketHeader: normalized.ticketHeader,
   });
   await saveLastFetchDate(getLocalDateKey());
+  await saveLastFetchAt(Date.now());
 
   return normalized;
 };
@@ -148,7 +172,11 @@ export const loadParkingConfig = async ({
   const today = getLocalDateKey();
   const cached = await getCachedParkingConfig();
   const lastFetchDate = await getLastFetchDate();
-  const shouldFetchRemote = forceRefresh || lastFetchDate !== today || !cached;
+  const lastFetchAt = await getLastFetchAt();
+  const isStaleByTime =
+    !lastFetchAt || Date.now() - lastFetchAt >= CONFIG_REFRESH_INTERVAL_MS;
+  const shouldFetchRemote =
+    forceRefresh || !cached || isStaleByTime || lastFetchDate !== today;
 
   if (shouldFetchRemote) {
     try {
