@@ -109,9 +109,6 @@ export default function App() {
     if (!user) return;
 
     const appStateSub = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        void otaUpdates.checkForUpdates({ silentIfOffline: true, silentIfError: true });
-      }
       if (state !== "active") return;
       const scheduledLogoutAt = scheduledLogoutAtRef.current;
       if (!scheduledLogoutAt) return;
@@ -123,7 +120,7 @@ export default function App() {
     return () => {
       appStateSub.remove();
     };
-  }, [logout, otaUpdates.checkForUpdates, user?.id]);
+  }, [logout, user?.id]);
 
   return (
     <SafeAreaProvider>
