@@ -15,15 +15,19 @@ const queueClosureSync = async (closure: unknown, closureId: string) => {
   requestSync("queue_closure_create");
 };
 
-export const getShiftSummary = async () => {
+export const getShiftSummary = async (userId?: string) => {
   const db = await getDb();
+  const normalizedUserId = userId?.trim();
+  const userFilter = normalizedUserId ? " AND user_id = ?" : "";
+  const params = normalizedUserId ? [normalizedUserId] : [];
 
   const entries = await db.getFirstAsync<{ total: number; amount: number }>(
     `SELECT
       COUNT(*) as total,
       COALESCE(SUM(entry_amount_charged), 0) as amount
      FROM tickets
-     WHERE date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
+     WHERE date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))${userFilter}`,
+    params
   );
 
   const lost = await db.getFirstAsync<{ total: number; amount: number }>(
@@ -33,14 +37,16 @@ export const getShiftSummary = async () => {
      FROM tickets
      WHERE status = 'LOST_PAID'
        AND date(datetime(exit_time, '-4 hours')) = date(datetime('now', '-4 hours'))
-       AND COALESCE(lost_extra_charged, 0) > 0`
+       AND COALESCE(lost_extra_charged, 0) > 0${userFilter}`,
+    params
   );
 
   const pending = await db.getFirstAsync<{ total: number }>(
     `SELECT COUNT(*) as total
      FROM tickets
      WHERE status = 'ACTIVE'
-       AND date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))`
+       AND date(datetime(entry_time, '-4 hours')) = date(datetime('now', '-4 hours'))${userFilter}`,
+    params
   );
 
   const normalTickets = entries?.total ?? 0;
@@ -81,7 +87,7 @@ export const hasShiftClosureToday = async (userId?: string) => {
 
 export const createShiftClosure = async (userId: string, notes?: string) => {
   const db = await getDb();
-  const summary = await getShiftSummary();
+  const summary = await getShiftSummary(userId);
   const id = createId();
   const now = new Date().toISOString();
 

@@ -35,14 +35,14 @@ export const ClosureScreen = () => {
   useFocusEffect(
     useCallback(() => {
       Promise.all([
-        getShiftSummary().then(setSummary),
+        getShiftSummary(user?.id).then(setSummary),
         hasShiftClosureToday(user?.id).then(setAlreadyClosedToday),
       ]).catch(() => undefined);
     }, [user?.id])
   );
 
   const refreshSummary = async () => {
-    const nextSummary = await getShiftSummary();
+    const nextSummary = await getShiftSummary(user?.id);
     setSummary(nextSummary);
   };
 
